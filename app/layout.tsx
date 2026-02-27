@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import ChatBot from "@/components/ChatBot";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -14,8 +15,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Octa City Bank",
-  description: "Octa City Bank - Your trusted banking partner",
+  title: "Octa City Bank - Banking Without Boundaries",
+  description: "Secure, smart, and seamless banking for the modern world. Manage your finances, access grants, and make global donations with Octa City Bank.",
 };
 
 export default function RootLayout({
@@ -29,6 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <ChatBot />
       </body>
     </html>
   );
