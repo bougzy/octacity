@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 nav-blur bg-[var(--nav-bg)] border-b border-[var(--card-border)]">
+    <motion.nav
+      initial={{ y: -80, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="fixed top-0 left-0 right-0 z-50 nav-blur bg-[var(--nav-bg)] border-b border-[var(--card-border)]"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2">
@@ -41,15 +47,25 @@ export default function Navbar() {
           </div>
         </div>
 
-        {mobileOpen && (
-          <div className="md:hidden border-t border-[var(--card-border)] py-4 space-y-3">
-            <Link href="/grants" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>Grants</Link>
-            <Link href="/faq" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>FAQ</Link>
-            <Link href="/about" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>About</Link>
-            <Link href="/login" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>Sign In</Link>
-          </div>
-        )}
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="md:hidden border-t border-[var(--card-border)] overflow-hidden"
+            >
+              <div className="py-4 space-y-3">
+                <Link href="/grants" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>Grants</Link>
+                <Link href="/faq" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>FAQ</Link>
+                <Link href="/about" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>About</Link>
+                <Link href="/login" className="block text-[var(--muted)] hover:text-white transition-colors text-sm" onClick={() => setMobileOpen(false)}>Sign In</Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </nav>
+    </motion.nav>
   );
 }

@@ -1,5 +1,8 @@
+"use client";
+
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import AnimateIn, { StaggerContainer, StaggerItem, ScaleIn } from "@/components/AnimateIn";
 
 const team = [
   { initials: "AC", name: "Alexander Chen", title: "CEO & Founder", bio: "Former VP at Goldman Sachs with 15+ years in digital banking innovation." },
@@ -50,7 +53,7 @@ export default function AboutPage() {
 
       {/* Hero */}
       <section className="pt-28 pb-16 px-4">
-        <div className="max-w-7xl mx-auto text-center">
+        <AnimateIn className="max-w-7xl mx-auto text-center">
           <h1 className="text-4xl sm:text-5xl font-bold mb-6">
             Building Trust Through <span className="gradient-text">Technology</span>
           </h1>
@@ -58,90 +61,106 @@ export default function AboutPage() {
             Octa City Bank combines cutting-edge technology with an unwavering commitment to
             security and accessibility, making banking truly borderless.
           </p>
-        </div>
+        </AnimateIn>
       </section>
 
       {/* Mission & Vision */}
       <section className="py-16 px-4 bg-[var(--section-alt)]">
         <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12">
-          <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-8">
-            <h2 className="text-2xl font-bold mb-4 gradient-text">Our Mission</h2>
-            <p className="text-[var(--muted)] leading-relaxed">
-              We are committed to democratizing access to banking and financial opportunities
-              worldwide. Our platform removes barriers that have traditionally excluded underserved
-              populations from accessing quality financial services, grants, and investment opportunities.
-            </p>
-          </div>
-          <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-8">
-            <h2 className="text-2xl font-bold mb-4 gradient-text">Our Vision</h2>
-            <p className="text-[var(--muted)] leading-relaxed">
-              We envision a world where everyone has access to financial empowerment. By 2030, we
-              aim to serve over 1 million users across 150+ countries, distributing significant
-              grants and processing billions in transaction volume to create lasting economic impact.
-            </p>
-          </div>
+          <AnimateIn direction="left">
+            <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-8 h-full">
+              <h2 className="text-2xl font-bold mb-4 gradient-text">Our Mission</h2>
+              <p className="text-[var(--muted)] leading-relaxed">
+                We are committed to democratizing access to banking and financial opportunities
+                worldwide. Our platform removes barriers that have traditionally excluded underserved
+                populations from accessing quality financial services, grants, and investment opportunities.
+              </p>
+            </div>
+          </AnimateIn>
+          <AnimateIn direction="right">
+            <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-8 h-full">
+              <h2 className="text-2xl font-bold mb-4 gradient-text">Our Vision</h2>
+              <p className="text-[var(--muted)] leading-relaxed">
+                We envision a world where everyone has access to financial empowerment. By 2030, we
+                aim to serve over 1 million users across 150+ countries, distributing significant
+                grants and processing billions in transaction volume to create lasting economic impact.
+              </p>
+            </div>
+          </AnimateIn>
         </div>
       </section>
 
       {/* Core Values */}
       <section className="py-20 px-4">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">
-            Our Core <span className="gradient-text">Values</span>
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <AnimateIn className="text-center mb-12">
+            <h2 className="text-3xl font-bold">
+              Our Core <span className="gradient-text">Values</span>
+            </h2>
+          </AnimateIn>
+          <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {values.map((v) => (
-              <div key={v.title} className="card-hover bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6 text-center">
-                <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={v.icon} />
-                  </svg>
+              <StaggerItem key={v.title}>
+                <div className="card-hover bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6 text-center h-full">
+                  <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={v.icon} />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">{v.title}</h3>
+                  <p className="text-[var(--muted)] text-sm">{v.desc}</p>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{v.title}</h3>
-                <p className="text-[var(--muted)] text-sm">{v.desc}</p>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerContainer>
         </div>
       </section>
 
       {/* Team */}
       <section className="py-20 px-4 bg-[var(--section-alt)]">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">
-            Meet Our <span className="gradient-text">Team</span>
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimateIn className="text-center mb-12">
+            <h2 className="text-3xl font-bold">
+              Meet Our <span className="gradient-text">Team</span>
+            </h2>
+          </AnimateIn>
+          <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {team.map((member) => (
-              <div key={member.name} className="card-hover bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6 text-center">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-white text-lg font-bold">{member.initials}</span>
+              <StaggerItem key={member.name}>
+                <div className="card-hover bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6 text-center h-full">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-white text-lg font-bold">{member.initials}</span>
+                  </div>
+                  <h3 className="text-lg font-semibold">{member.name}</h3>
+                  <p className="text-blue-400 text-sm mb-3">{member.title}</p>
+                  <p className="text-[var(--muted)] text-sm">{member.bio}</p>
                 </div>
-                <h3 className="text-lg font-semibold">{member.name}</h3>
-                <p className="text-blue-400 text-sm mb-3">{member.title}</p>
-                <p className="text-[var(--muted)] text-sm">{member.bio}</p>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerContainer>
         </div>
       </section>
 
       {/* Tech Stack */}
       <section className="py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-8">
-            Technology <span className="gradient-text">Stack</span>
-          </h2>
-          <div className="flex flex-wrap justify-center gap-3">
-            {techStack.map((tech) => (
-              <span
-                key={tech}
-                className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-full px-5 py-2 text-sm text-[var(--muted)]"
-              >
-                {tech}
-              </span>
-            ))}
-          </div>
+          <AnimateIn>
+            <h2 className="text-3xl font-bold mb-8">
+              Technology <span className="gradient-text">Stack</span>
+            </h2>
+          </AnimateIn>
+          <ScaleIn delay={0.2}>
+            <div className="flex flex-wrap justify-center gap-3">
+              {techStack.map((tech) => (
+                <span
+                  key={tech}
+                  className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-full px-5 py-2 text-sm text-[var(--muted)]"
+                >
+                  {tech}
+                </span>
+              ))}
+            </div>
+          </ScaleIn>
         </div>
       </section>
 

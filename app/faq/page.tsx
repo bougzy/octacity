@@ -3,6 +3,7 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useState } from "react";
+import AnimateIn, { StaggerContainer, StaggerItem, ScaleIn } from "@/components/AnimateIn";
 
 const faqCategories = [
   {
@@ -88,37 +89,41 @@ export default function FAQPage() {
 
       <section className="pt-28 pb-16 px-4">
         <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-16">
+          <AnimateIn className="text-center mb-16">
             <h1 className="text-4xl sm:text-5xl font-bold mb-4">
               Frequently Asked <span className="gradient-text">Questions</span>
             </h1>
             <p className="text-[var(--muted)] text-lg">
               Find answers to common questions about Octa City Bank. Can&apos;t find what you&apos;re looking for? Chat with our support team.
             </p>
-          </div>
+          </AnimateIn>
 
-          <div className="space-y-8">
+          <StaggerContainer className="space-y-8" staggerDelay={0.15}>
             {faqCategories.map((cat) => (
-              <div key={cat.category} className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-                <h2 className="text-lg font-semibold mb-4 gradient-text">{cat.category}</h2>
-                <div>
-                  {cat.questions.map((item) => (
-                    <AccordionItem key={item.q} question={item.q} answer={item.a} />
-                  ))}
+              <StaggerItem key={cat.category}>
+                <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
+                  <h2 className="text-lg font-semibold mb-4 gradient-text">{cat.category}</h2>
+                  <div>
+                    {cat.questions.map((item) => (
+                      <AccordionItem key={item.q} question={item.q} answer={item.a} />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerContainer>
 
-          <div className="text-center mt-12 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-8">
-            <h2 className="text-xl font-bold mb-3">Still have questions?</h2>
-            <p className="text-[var(--muted)] text-sm mb-6">
-              Our support team is available 24/7 to help you with any questions.
-            </p>
-            <a href="#" className="btn-primary text-white px-6 py-3 rounded-lg text-sm font-medium inline-block">
-              Chat with Support
-            </a>
-          </div>
+          <ScaleIn delay={0.2}>
+            <div className="text-center mt-12 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-8">
+              <h2 className="text-xl font-bold mb-3">Still have questions?</h2>
+              <p className="text-[var(--muted)] text-sm mb-6">
+                Our support team is available 24/7 to help you with any questions.
+              </p>
+              <a href="#" className="btn-primary text-white px-6 py-3 rounded-lg text-sm font-medium inline-block">
+                Chat with Support
+              </a>
+            </div>
+          </ScaleIn>
         </div>
       </section>
 
