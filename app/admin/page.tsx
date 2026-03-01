@@ -25,6 +25,9 @@ interface Transaction {
   currency: string;
   status: string;
   description: string;
+  senderName?: string;
+  receiverName?: string;
+  transactionDate?: string;
   createdAt: string;
 }
 
@@ -48,6 +51,23 @@ interface ChatMessage {
   createdAt: string;
 }
 
+const defaultTxForm = {
+  type: "deposit",
+  amount: "",
+  currency: "USD",
+  senderName: "",
+  receiverName: "",
+  transactionDate: "",
+  description: "",
+  status: "completed",
+  updateBalance: true,
+};
+
+function txDisplayDate(tx: Transaction) {
+  const d = tx.transactionDate || tx.createdAt;
+  return new Date(d).toLocaleString();
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
@@ -56,15 +76,23 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // User management
+  // Balance modal
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editBalance, setEditBalance] = useState("");
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [balanceAction, setBalanceAction] = useState<"set" | "deposit" | "withdraw">("deposit");
   const [txDescription, setTxDescription] = useState("");
 
+  // Transaction History modal
+  const [showTxModal, setShowTxModal] = useState(false);
+  const [txModalUser, setTxModalUser] = useState<User | null>(null);
+  const [txForm, setTxForm] = useState({ ...defaultTxForm });
+
   // Transactions
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  // Per-user transactions (for the history modal preview)
+  const [userTxHistory, setUserTxHistory] = useState<Transaction[]>([]);
+  const [viewingUserHistory, setViewingUserHistory] = useState<User | null>(null);
 
   // Chat
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -85,6 +113,11 @@ export default function AdminPage() {
   const fetchConversations = useCallback(async () => {
     const res = await fetch("/api/messages");
     if (res.ok) { const d = await res.json(); setConversations(d.messages || []); }
+  }, []);
+
+  const fetchUserHistory = useCallback(async (userId: string) => {
+    const res = await fetch(`/api/transactions?userId=${userId}`);
+    if (res.ok) { const d = await res.json(); setUserTxHistory(d.transactions || []); }
   }, []);
 
   useEffect(() => {
@@ -153,6 +186,7 @@ export default function AdminPage() {
           amount,
           description: txDescription || `Admin ${balanceAction}`,
           status: "completed",
+          updateBalance: true,
         }),
       });
       await fetchUsers();
@@ -162,6 +196,47 @@ export default function AdminPage() {
     setEditBalance("");
     setTxDescription("");
     setSelectedUser(null);
+  };
+
+  const openTxModal = (user: User) => {
+    setTxModalUser(user);
+    setTxForm({ ...defaultTxForm });
+    fetchUserHistory(user._id);
+    setShowTxModal(true);
+  };
+
+  const openUserHistory = (user: User) => {
+    setViewingUserHistory(user);
+    fetchUserHistory(user._id);
+  };
+
+  const handleAddTransaction = async () => {
+    if (!txModalUser || !txForm.amount) return;
+    const amount = parseFloat(txForm.amount);
+    if (isNaN(amount) || amount <= 0) return;
+
+    await fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: txModalUser._id,
+        type: txForm.type,
+        amount,
+        currency: txForm.currency,
+        senderName: txForm.senderName,
+        receiverName: txForm.receiverName,
+        transactionDate: txForm.transactionDate || undefined,
+        description: txForm.description,
+        status: txForm.status,
+        updateBalance: txForm.updateBalance,
+      }),
+    });
+
+    await fetchUsers();
+    await fetchTransactions();
+    await fetchUserHistory(txModalUser._id);
+    // Reset form but keep modal open so admin can add more
+    setTxForm({ ...defaultTxForm });
   };
 
   const sendAdminMessage = async () => {
@@ -200,6 +275,9 @@ export default function AdminPage() {
     { id: "transactions", label: "Transactions", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", badge: 0 },
     { id: "messages", label: "Messages", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", badge: totalUnread },
   ];
+
+  const showSenderField = ["deposit", "transfer", "grant"].includes(txForm.type);
+  const showReceiverField = ["withdrawal", "transfer", "donation"].includes(txForm.type);
 
   return (
     <div className="min-h-screen bg-[var(--background)] font-[family-name:var(--font-geist-sans)]">
@@ -256,7 +334,7 @@ export default function AdminPage() {
             </div>
             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
               <p className="text-[var(--muted)] text-sm mb-1">Total Managed</p>
-              <p className="text-3xl font-bold gradient-text">${totalBalance.toLocaleString("en-US", {minimumFractionDigits:2})}</p>
+              <p className="text-3xl font-bold gradient-text">${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
               <p className="text-[var(--muted)] text-sm mb-1">Unread Messages</p>
@@ -275,11 +353,11 @@ export default function AdminPage() {
                   <th className="pb-3 font-medium">Name</th><th className="pb-3 font-medium">Email</th><th className="pb-3 font-medium">Balance</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Joined</th>
                 </tr></thead>
                 <tbody>
-                  {users.slice(0,5).map(u => (
+                  {users.slice(0, 5).map(u => (
                     <tr key={u._id} className="border-b border-[var(--card-border)] last:border-0">
                       <td className="py-3 font-medium">{u.fullName}</td>
                       <td className="py-3 text-[var(--muted)]">{u.email}</td>
-                      <td className="py-3 font-medium">${u.balance.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
+                      <td className="py-3 font-medium">${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                       <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${u.isVerified ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>{u.isVerified ? "Verified" : "Pending"}</span></td>
                       <td className="py-3 text-[var(--muted)]">{new Date(u.createdAt).toLocaleDateString()}</td>
                     </tr>
@@ -298,15 +376,16 @@ export default function AdminPage() {
             {transactions.length > 0 ? (
               <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
-                  <th className="pb-3 font-medium">User</th><th className="pb-3 font-medium">Type</th><th className="pb-3 font-medium">Amount</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Date</th>
+                  <th className="pb-3 font-medium">User</th><th className="pb-3 font-medium">Type</th><th className="pb-3 font-medium">Amount</th><th className="pb-3 font-medium">Sender / Receiver</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Date</th>
                 </tr></thead>
-                <tbody>{transactions.slice(0,5).map(tx => (
+                <tbody>{transactions.slice(0, 5).map(tx => (
                   <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0">
                     <td className="py-3">{typeof tx.userId === "object" ? tx.userId.fullName : "—"}</td>
                     <td className="py-3 capitalize">{tx.type}</td>
                     <td className={`py-3 font-medium ${tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}`}>{tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString()}</td>
+                    <td className="py-3 text-[var(--muted)] text-xs">{tx.senderName || tx.receiverName || "—"}</td>
                     <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>{tx.status}</span></td>
-                    <td className="py-3 text-[var(--muted)]">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                    <td className="py-3 text-[var(--muted)]">{txDisplayDate(tx)}</td>
                   </tr>
                 ))}</tbody>
               </table></div>
@@ -316,60 +395,126 @@ export default function AdminPage() {
 
         {/* USERS */}
         {activeTab === "users" && (
-          <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-4">All Users ({users.length})</h2>
-            <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
-                <th className="pb-3 font-medium">Name</th><th className="pb-3 font-medium">Email</th><th className="pb-3 font-medium">Phone</th><th className="pb-3 font-medium">Balance</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Role</th><th className="pb-3 font-medium">Actions</th>
-              </tr></thead>
-              <tbody>{users.map(u => (
-                <tr key={u._id} className="border-b border-[var(--card-border)] last:border-0">
-                  <td className="py-3"><p className="font-medium">{u.fullName}</p><p className="text-xs text-[var(--muted)]">{u.address}</p></td>
-                  <td className="py-3 text-[var(--muted)]">{u.email}</td>
-                  <td className="py-3 text-[var(--muted)]">{u.phone}</td>
-                  <td className="py-3 font-medium">${u.balance.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
-                  <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${u.isVerified ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>{u.isVerified ? "Verified" : "Pending"}</span></td>
-                  <td className="py-3 capitalize text-[var(--muted)]">{u.role}</td>
-                  <td className="py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => { setSelectedUser(u); setShowBalanceModal(true); setEditBalance(""); setTxDescription(""); }}
-                        className="text-xs bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg hover:bg-blue-500/20">Update Balance</button>
-                      <button onClick={() => updateUser(u._id, { isVerified: !u.isVerified })}
-                        className={`text-xs px-3 py-1 rounded-lg ${u.isVerified ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`}>{u.isVerified ? "Unverify" : "Verify"}</button>
-                      {u.role !== "admin" && <button onClick={() => updateUser(u._id, { role: "admin" })} className="text-xs bg-purple-500/10 text-purple-400 px-3 py-1 rounded-lg hover:bg-purple-500/20">Make Admin</button>}
-                      <button onClick={() => { setChatUser({ _id: u._id, lastMessage: "", lastDate: "", senderName: u.fullName, unreadCount: 0, user: { fullName: u.fullName, email: u.email } }); setActiveTab("messages"); }}
-                        className="text-xs bg-cyan-500/10 text-cyan-400 px-3 py-1 rounded-lg hover:bg-cyan-500/20">Message</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table></div>
-            {users.length === 0 && <p className="text-center py-8 text-[var(--muted)]">No users yet</p>}
+          <div className="space-y-6">
+            {/* User history panel */}
+            {viewingUserHistory && (
+              <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold">Transaction History — {viewingUserHistory.fullName}</h2>
+                    <p className="text-xs text-[var(--muted)]">{viewingUserHistory.email} · Current balance: <span className="text-white font-medium">${viewingUserHistory.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></p>
+                  </div>
+                  <button onClick={() => { setViewingUserHistory(null); setUserTxHistory([]); }} className="text-[var(--muted)] hover:text-white text-sm">Close ×</button>
+                </div>
+                {userTxHistory.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
+                        <th className="pb-3 font-medium">Type</th>
+                        <th className="pb-3 font-medium">Amount</th>
+                        <th className="pb-3 font-medium">Sender / Receiver</th>
+                        <th className="pb-3 font-medium">Description</th>
+                        <th className="pb-3 font-medium">Status</th>
+                        <th className="pb-3 font-medium">Date</th>
+                      </tr></thead>
+                      <tbody>{userTxHistory.map(tx => (
+                        <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0">
+                          <td className="py-3 capitalize font-medium">{tx.type}</td>
+                          <td className={`py-3 font-bold ${tx.type === "withdrawal" || tx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                            {tx.type === "withdrawal" || tx.type === "donation" ? "-" : "+"}${tx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {tx.currency}
+                          </td>
+                          <td className="py-3 text-[var(--muted)]">
+                            {tx.senderName && <span className="block text-xs">From: {tx.senderName}</span>}
+                            {tx.receiverName && <span className="block text-xs">To: {tx.receiverName}</span>}
+                            {!tx.senderName && !tx.receiverName && "—"}
+                          </td>
+                          <td className="py-3 text-[var(--muted)] text-xs">{tx.description || "—"}</td>
+                          <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>{tx.status}</span></td>
+                          <td className="py-3 text-[var(--muted)] text-xs">{txDisplayDate(tx)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                ) : <p className="text-center py-6 text-[var(--muted)] text-sm">No transaction history for this user yet.</p>}
+              </div>
+            )}
+
+            <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
+              <h2 className="text-lg font-semibold mb-4">All Users ({users.length})</h2>
+              <div className="overflow-x-auto"><table className="w-full text-sm">
+                <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
+                  <th className="pb-3 font-medium">Name</th><th className="pb-3 font-medium">Email</th><th className="pb-3 font-medium">Balance</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Role</th><th className="pb-3 font-medium">Actions</th>
+                </tr></thead>
+                <tbody>{users.map(u => (
+                  <tr key={u._id} className="border-b border-[var(--card-border)] last:border-0">
+                    <td className="py-3"><p className="font-medium">{u.fullName}</p><p className="text-xs text-[var(--muted)]">{u.phone}</p></td>
+                    <td className="py-3 text-[var(--muted)]">{u.email}</td>
+                    <td className="py-3 font-medium">${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                    <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${u.isVerified ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>{u.isVerified ? "Verified" : "Pending"}</span></td>
+                    <td className="py-3 capitalize text-[var(--muted)]">{u.role}</td>
+                    <td className="py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => { setSelectedUser(u); setShowBalanceModal(true); setEditBalance(""); setTxDescription(""); }}
+                          className="text-xs bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg hover:bg-blue-500/20">Update Balance</button>
+                        <button onClick={() => openTxModal(u)}
+                          className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-lg hover:bg-emerald-500/20">+ Add History</button>
+                        <button onClick={() => openUserHistory(u)}
+                          className="text-xs bg-purple-500/10 text-purple-400 px-3 py-1 rounded-lg hover:bg-purple-500/20">View History</button>
+                        <button onClick={() => updateUser(u._id, { isVerified: !u.isVerified })}
+                          className={`text-xs px-3 py-1 rounded-lg ${u.isVerified ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`}>{u.isVerified ? "Unverify" : "Verify"}</button>
+                        {u.role !== "admin" && <button onClick={() => updateUser(u._id, { role: "admin" })} className="text-xs bg-pink-500/10 text-pink-400 px-3 py-1 rounded-lg hover:bg-pink-500/20">Make Admin</button>}
+                        <button onClick={() => { setChatUser({ _id: u._id, lastMessage: "", lastDate: "", senderName: u.fullName, unreadCount: 0, user: { fullName: u.fullName, email: u.email } }); setActiveTab("messages"); }}
+                          className="text-xs bg-cyan-500/10 text-cyan-400 px-3 py-1 rounded-lg hover:bg-cyan-500/20">Message</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table></div>
+              {users.length === 0 && <p className="text-center py-8 text-[var(--muted)]">No users yet</p>}
+            </div>
           </div>
         )}
 
         {/* TRANSACTIONS */}
         {activeTab === "transactions" && (
           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-4">All Transactions ({transactions.length})</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">All Transactions ({transactions.length})</h2>
+              <button onClick={() => { setTxModalUser(null); setTxForm({ ...defaultTxForm }); setShowTxModal(true); }}
+                className="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium">+ Add Transaction</button>
+            </div>
             {transactions.length > 0 ? (
               <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
-                  <th className="pb-3 font-medium">User</th><th className="pb-3 font-medium">Type</th><th className="pb-3 font-medium">Amount</th><th className="pb-3 font-medium">Currency</th><th className="pb-3 font-medium">Description</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Date</th>
+                  <th className="pb-3 font-medium">User</th>
+                  <th className="pb-3 font-medium">Type</th>
+                  <th className="pb-3 font-medium">Amount</th>
+                  <th className="pb-3 font-medium">Currency</th>
+                  <th className="pb-3 font-medium">Sender / Receiver</th>
+                  <th className="pb-3 font-medium">Description</th>
+                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Date</th>
                 </tr></thead>
                 <tbody>{transactions.map(tx => (
                   <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0">
                     <td className="py-3">{typeof tx.userId === "object" ? tx.userId.fullName : "—"}</td>
                     <td className="py-3 capitalize">{tx.type}</td>
-                    <td className={`py-3 font-medium ${tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}`}>{tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString()}</td>
+                    <td className={`py-3 font-medium ${tx.type === "withdrawal" || tx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                      {tx.type === "withdrawal" || tx.type === "donation" ? "-" : "+"}${tx.amount.toLocaleString()}
+                    </td>
                     <td className="py-3 text-[var(--muted)]">{tx.currency}</td>
+                    <td className="py-3 text-[var(--muted)] text-xs">
+                      {tx.senderName && <span className="block">From: {tx.senderName}</span>}
+                      {tx.receiverName && <span className="block">To: {tx.receiverName}</span>}
+                      {!tx.senderName && !tx.receiverName && "—"}
+                    </td>
                     <td className="py-3 text-[var(--muted)]">{tx.description || "—"}</td>
                     <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>{tx.status}</span></td>
-                    <td className="py-3 text-[var(--muted)]">{new Date(tx.createdAt).toLocaleString()}</td>
+                    <td className="py-3 text-[var(--muted)]">{txDisplayDate(tx)}</td>
                   </tr>
                 ))}</tbody>
               </table></div>
-            ) : <p className="text-center py-12 text-[var(--muted)]">No transactions yet. Use &quot;Update Balance&quot; on any user to create transactions.</p>}
+            ) : <p className="text-center py-12 text-[var(--muted)]">No transactions yet. Click &quot;+ Add Transaction&quot; to add transaction history for a user.</p>}
           </div>
         )}
 
@@ -416,7 +561,7 @@ export default function AdminPage() {
                     <div key={msg._id} className={`flex ${msg.senderRole === "admin" ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${msg.senderRole === "admin" ? "bg-blue-500 text-white rounded-br-md" : "bg-[var(--background)] border border-[var(--card-border)] rounded-bl-md"}`}>
                         <p>{msg.content}</p>
-                        <p className={`text-xs mt-1 ${msg.senderRole === "admin" ? "text-blue-200" : "text-[var(--muted)]"}`}>{new Date(msg.createdAt).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</p>
+                        <p className={`text-xs mt-1 ${msg.senderRole === "admin" ? "text-blue-200" : "text-[var(--muted)]"}`}>{new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                       </div>
                     </div>
                   ))}
@@ -455,13 +600,13 @@ export default function AdminPage() {
             <div className="mb-4 p-3 bg-[var(--background)] rounded-lg">
               <p className="text-sm font-medium">{selectedUser.fullName}</p>
               <p className="text-xs text-[var(--muted)]">{selectedUser.email}</p>
-              <p className="text-lg font-bold gradient-text mt-1">Current: ${selectedUser.balance.toLocaleString("en-US",{minimumFractionDigits:2})}</p>
+              <p className="text-lg font-bold gradient-text mt-1">Current: ${selectedUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Action</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(["deposit","withdraw","set"] as const).map(a => (
+                  {(["deposit", "withdraw", "set"] as const).map(a => (
                     <button key={a} onClick={() => setBalanceAction(a)}
                       className={`py-2 rounded-lg text-sm font-medium capitalize ${balanceAction === a ? "bg-blue-500 text-white" : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"}`}>{a}</button>
                   ))}
@@ -481,13 +626,245 @@ export default function AdminPage() {
                 <div className="p-3 bg-[var(--background)] rounded-lg">
                   <p className="text-xs text-[var(--muted)]">New balance will be:</p>
                   <p className="text-lg font-bold gradient-text">
-                    ${(balanceAction === "set" ? parseFloat(editBalance) : balanceAction === "deposit" ? selectedUser.balance + parseFloat(editBalance) : selectedUser.balance - parseFloat(editBalance)).toLocaleString("en-US",{minimumFractionDigits:2})}
+                    ${(balanceAction === "set" ? parseFloat(editBalance) : balanceAction === "deposit" ? selectedUser.balance + parseFloat(editBalance) : selectedUser.balance - parseFloat(editBalance)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </p>
                 </div>
               )}
               <div className="flex gap-3">
                 <button onClick={() => { setShowBalanceModal(false); setSelectedUser(null); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Cancel</button>
                 <button onClick={handleBalanceUpdate} disabled={!editBalance || parseFloat(editBalance) <= 0} className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50">Confirm</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction History Modal */}
+      {showTxModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-2xl my-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold">Add Transaction History</h3>
+                <p className="text-xs text-[var(--muted)] mt-0.5">Create a backdated or custom transaction entry for a user</p>
+              </div>
+              <button onClick={() => { setShowTxModal(false); setTxModalUser(null); setUserTxHistory([]); }} className="text-[var(--muted)] hover:text-white">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Left: Form */}
+              <div className="space-y-4">
+                {/* User selector */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Select User</label>
+                  <select
+                    value={txModalUser?._id || ""}
+                    onChange={e => {
+                      const u = users.find(u => u._id === e.target.value) || null;
+                      setTxModalUser(u);
+                      if (u) fetchUserHistory(u._id);
+                    }}
+                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">— Select a user —</option>
+                    {users.filter(u => u.role !== "admin").map(u => (
+                      <option key={u._id} value={u._id}>{u.fullName} ({u.email})</option>
+                    ))}
+                  </select>
+                  {txModalUser && (
+                    <p className="text-xs text-[var(--muted)] mt-1">Current balance: <span className="text-white font-medium">${txModalUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></p>
+                  )}
+                </div>
+
+                {/* Type */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Transaction Type</label>
+                  <select
+                    value={txForm.type}
+                    onChange={e => setTxForm({ ...txForm, type: e.target.value, senderName: "", receiverName: "" })}
+                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="deposit">Deposit</option>
+                    <option value="withdrawal">Withdrawal</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="grant">Grant</option>
+                    <option value="donation">Donation</option>
+                  </select>
+                </div>
+
+                {/* Amount & Currency */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Amount</label>
+                    <input
+                      type="number"
+                      value={txForm.amount}
+                      onChange={e => setTxForm({ ...txForm, amount: e.target.value })}
+                      className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Currency</label>
+                    <select
+                      value={txForm.currency}
+                      onChange={e => setTxForm({ ...txForm, currency: e.target.value })}
+                      className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                    >
+                      {["USD", "EUR", "GBP", "BTC", "ETH", "USDT", "BNB", "NGN"].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Sender name */}
+                {showSenderField && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      Sender Name <span className="text-[var(--muted)]">(who sent the money)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={txForm.senderName}
+                      onChange={e => setTxForm({ ...txForm, senderName: e.target.value })}
+                      className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. Bank of America, John Smith, PayPal Inc."
+                    />
+                  </div>
+                )}
+
+                {/* Receiver name */}
+                {showReceiverField && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      Receiver Name <span className="text-[var(--muted)]">(who received the money)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={txForm.receiverName}
+                      onChange={e => setTxForm({ ...txForm, receiverName: e.target.value })}
+                      className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. Amazon LLC, Jane Doe, Crypto Exchange"
+                    />
+                  </div>
+                )}
+
+                {/* Transaction Date (backdating) */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">
+                    Transaction Date & Time <span className="text-[var(--muted)]">(leave empty for now)</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={txForm.transactionDate}
+                    onChange={e => setTxForm({ ...txForm, transactionDate: e.target.value })}
+                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Description / Memo</label>
+                  <input
+                    type="text"
+                    value={txForm.description}
+                    onChange={e => setTxForm({ ...txForm, description: e.target.value })}
+                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
+                    placeholder="e.g. Monthly salary, Wire transfer, Grant disbursement..."
+                  />
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Status</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["completed", "pending", "failed"] as const).map(s => (
+                      <button key={s} onClick={() => setTxForm({ ...txForm, status: s })}
+                        className={`py-2 rounded-lg text-sm font-medium capitalize ${txForm.status === s ? (s === "completed" ? "bg-emerald-500 text-white" : s === "pending" ? "bg-amber-500 text-white" : "bg-red-500 text-white") : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"}`}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Update balance toggle */}
+                <div className="flex items-center justify-between p-3 bg-[var(--background)] rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium">Update User Balance</p>
+                    <p className="text-xs text-[var(--muted)]">Adjust balance based on this transaction</p>
+                  </div>
+                  <button
+                    onClick={() => setTxForm({ ...txForm, updateBalance: !txForm.updateBalance })}
+                    className={`w-12 h-6 rounded-full relative transition-colors ${txForm.updateBalance ? "bg-blue-500" : "bg-[var(--card-border)]"}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${txForm.updateBalance ? "right-1" : "left-1"}`}></div>
+                  </button>
+                </div>
+
+                {/* Preview */}
+                {txModalUser && txForm.amount && parseFloat(txForm.amount) > 0 && (
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <p className="text-xs text-blue-400 font-medium mb-1">Preview</p>
+                    <p className="text-sm">
+                      <span className="font-medium">{txModalUser.fullName}</span> — {txForm.type} of{" "}
+                      <span className={`font-bold ${txForm.type === "withdrawal" || txForm.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                        {txForm.type === "withdrawal" || txForm.type === "donation" ? "-" : "+"}${parseFloat(txForm.amount).toLocaleString()} {txForm.currency}
+                      </span>
+                    </p>
+                    {txForm.senderName && <p className="text-xs text-[var(--muted)] mt-1">From: {txForm.senderName}</p>}
+                    {txForm.receiverName && <p className="text-xs text-[var(--muted)] mt-1">To: {txForm.receiverName}</p>}
+                    {txForm.transactionDate && <p className="text-xs text-[var(--muted)] mt-1">Date: {new Date(txForm.transactionDate).toLocaleString()}</p>}
+                    {txForm.updateBalance && txForm.status === "completed" && (
+                      <p className="text-xs text-[var(--muted)] mt-1">
+                        New balance: <span className="text-white font-medium">
+                          ${(txForm.type === "withdrawal" || txForm.type === "donation"
+                            ? txModalUser.balance - parseFloat(txForm.amount)
+                            : txModalUser.balance + parseFloat(txForm.amount)
+                          ).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button onClick={() => { setShowTxModal(false); setTxModalUser(null); setUserTxHistory([]); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Close</button>
+                  <button
+                    onClick={handleAddTransaction}
+                    disabled={!txModalUser || !txForm.amount || parseFloat(txForm.amount) <= 0}
+                    className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    Add Transaction
+                  </button>
+                </div>
+              </div>
+
+              {/* Right: User's existing history */}
+              <div>
+                <h4 className="text-sm font-semibold mb-3 text-[var(--muted)]">
+                  {txModalUser ? `${txModalUser.fullName}'s History (${userTxHistory.length})` : "Select a user to see their history"}
+                </h4>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                  {userTxHistory.length > 0 ? userTxHistory.map(tx => (
+                    <div key={tx._id} className="p-3 bg-[var(--background)] border border-[var(--card-border)] rounded-lg">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${tx.type === "withdrawal" || tx.type === "donation" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>{tx.type}</span>
+                        <span className={`text-sm font-bold ${tx.type === "withdrawal" || tx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                          {tx.type === "withdrawal" || tx.type === "donation" ? "-" : "+"}${tx.amount.toLocaleString()} {tx.currency}
+                        </span>
+                      </div>
+                      {tx.senderName && <p className="text-xs text-[var(--muted)]">From: {tx.senderName}</p>}
+                      {tx.receiverName && <p className="text-xs text-[var(--muted)]">To: {tx.receiverName}</p>}
+                      {tx.description && <p className="text-xs text-[var(--muted)]">{tx.description}</p>}
+                      <p className="text-xs text-[var(--muted)] mt-1">{txDisplayDate(tx)}</p>
+                    </div>
+                  )) : txModalUser ? (
+                    <p className="text-xs text-[var(--muted)] py-4 text-center">No history yet. Add the first transaction above.</p>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>

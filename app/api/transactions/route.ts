@@ -24,14 +24,14 @@ export async function GET(req: NextRequest) {
 
     if (decoded.role === "admin") {
       if (userId) {
-        transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
+        transactions = await Transaction.find({ userId }).sort({ transactionDate: -1, createdAt: -1 });
       } else {
         transactions = await Transaction.find()
           .populate("userId", "fullName email")
-          .sort({ createdAt: -1 });
+          .sort({ transactionDate: -1, createdAt: -1 });
       }
     } else {
-      transactions = await Transaction.find({ userId: decoded.userId }).sort({ createdAt: -1 });
+      transactions = await Transaction.find({ userId: decoded.userId }).sort({ transactionDate: -1, createdAt: -1 });
     }
 
     return NextResponse.json({ transactions });
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Admin creates a transaction (deposit/withdrawal/grant)
+// POST - Admin creates a transaction
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -55,11 +55,24 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    const { userId, type, amount, currency, description, status } = await req.json();
+    const {
+      userId,
+      type,
+      amount,
+      currency,
+      description,
+      status,
+      senderName,
+      receiverName,
+      transactionDate,
+      updateBalance,
+    } = await req.json();
 
     if (!userId || !type || amount === undefined) {
       return NextResponse.json({ error: "userId, type, and amount are required" }, { status: 400 });
     }
+
+    const txStatus = status || "completed";
 
     // Create the transaction
     const transaction = await Transaction.create({
@@ -68,21 +81,23 @@ export async function POST(req: NextRequest) {
       amount,
       currency: currency || "USD",
       description: description || "",
-      status: status || "completed",
+      status: txStatus,
+      senderName: senderName || "",
+      receiverName: receiverName || "",
+      transactionDate: transactionDate ? new Date(transactionDate) : null,
     });
 
-    // Update user balance if transaction is completed
-    if (status === "completed" || !status) {
+    // Update user balance if updateBalance !== false and status is completed
+    if (updateBalance !== false && txStatus === "completed") {
       const balanceChange = type === "withdrawal" ? -amount : amount;
       await User.findByIdAndUpdate(userId, { $inc: { balance: balanceChange } });
     }
 
-    // Fetch updated user
     const user = await User.findById(userId).select("-password");
 
     return NextResponse.json({ transaction, user }, { status: 201 });
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
 

@@ -24,6 +24,9 @@ interface Transaction {
   currency: string;
   status: string;
   description: string;
+  senderName?: string;
+  receiverName?: string;
+  transactionDate?: string;
   createdAt: string;
 }
 
@@ -150,6 +153,25 @@ export default function DashboardPage() {
   const totalDeposits = transactions.filter(t => t.type === "deposit" && t.status === "completed").reduce((s, t) => s + t.amount, 0);
   const totalWithdrawals = transactions.filter(t => t.type === "withdrawal" && t.status === "completed").reduce((s, t) => s + t.amount, 0);
 
+  const txDisplayDate = (tx: Transaction) => {
+    const d = tx.transactionDate || tx.createdAt;
+    return new Date(d).toLocaleString();
+  };
+
+  const txLabel = (tx: Transaction) => {
+    if (tx.type === "deposit" || tx.type === "grant") {
+      return tx.senderName ? `From: ${tx.senderName}` : tx.description || "Deposit";
+    }
+    if (tx.type === "withdrawal" || tx.type === "donation") {
+      return tx.receiverName ? `To: ${tx.receiverName}` : tx.description || "Withdrawal";
+    }
+    if (tx.type === "transfer") {
+      if (tx.senderName) return `From: ${tx.senderName}`;
+      if (tx.receiverName) return `To: ${tx.receiverName}`;
+    }
+    return tx.description || tx.type;
+  };
+
   const navItems = [
     { id: "overview", label: "Overview", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6", badge: 0 },
     { id: "transactions", label: "Transactions", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", badge: 0 },
@@ -249,27 +271,31 @@ export default function DashboardPage() {
             </div>
             {transactions.length > 0 ? (
               <div className="space-y-3">
-                {transactions.slice(0,5).map(tx => (
+                {transactions.slice(0,5).map(tx => {
+                  const isDebit = tx.type === "withdrawal" || tx.type === "donation";
+                  return (
                   <div key={tx._id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--card-border)]">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === "withdrawal" ? "bg-red-500/10" : "bg-emerald-500/10"}`}>
-                        <svg className={`w-5 h-5 ${tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tx.type === "withdrawal" ? "M17 13l-5 5m0 0l-5-5m5 5V6" : "M7 11l5-5m0 0l5 5m-5-5v12"} />
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDebit ? "bg-red-500/10" : "bg-emerald-500/10"}`}>
+                        <svg className={`w-5 h-5 ${isDebit ? "text-red-400" : "text-emerald-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isDebit ? "M17 13l-5 5m0 0l-5-5m5 5V6" : "M7 11l5-5m0 0l5 5m-5-5v12"} />
                         </svg>
                       </div>
                       <div>
                         <p className="text-sm font-medium capitalize">{tx.type}</p>
-                        <p className="text-xs text-[var(--muted)]">{tx.description || new Date(tx.createdAt).toLocaleDateString()}</p>
+                        <p className="text-xs text-[var(--muted)]">{txLabel(tx)}</p>
+                        <p className="text-xs text-[var(--muted)]">{txDisplayDate(tx)}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className={`text-sm font-semibold ${tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}`}>
-                        {tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString("en-US",{minimumFractionDigits:2})}
+                      <p className={`text-sm font-semibold ${isDebit ? "text-red-400" : "text-emerald-400"}`}>
+                        {isDebit ? "-" : "+"}${tx.amount.toLocaleString("en-US",{minimumFractionDigits:2})}
                       </p>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>{tx.status}</span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-8 text-[var(--muted)]">
@@ -287,29 +313,34 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold mb-4">Transaction History ({transactions.length})</h2>
             {transactions.length > 0 ? (
               <div className="space-y-3">
-                {transactions.map(tx => (
+                {transactions.map(tx => {
+                  const isDebit = tx.type === "withdrawal" || tx.type === "donation";
+                  return (
                   <div key={tx._id} className="flex items-center justify-between p-4 rounded-lg border border-[var(--card-border)]">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === "withdrawal" ? "bg-red-500/10" : "bg-emerald-500/10"}`}>
-                        <svg className={`w-5 h-5 ${tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tx.type === "withdrawal" ? "M17 13l-5 5m0 0l-5-5m5 5V6" : "M7 11l5-5m0 0l5 5m-5-5v12"} />
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isDebit ? "bg-red-500/10" : "bg-emerald-500/10"}`}>
+                        <svg className={`w-5 h-5 ${isDebit ? "text-red-400" : "text-emerald-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isDebit ? "M17 13l-5 5m0 0l-5-5m5 5V6" : "M7 11l5-5m0 0l5 5m-5-5v12"} />
                         </svg>
                       </div>
                       <div>
                         <p className="text-sm font-medium capitalize">{tx.type}</p>
-                        <p className="text-xs text-[var(--muted)]">{tx.description || "—"}</p>
-                        <p className="text-xs text-[var(--muted)]">{new Date(tx.createdAt).toLocaleString()}</p>
+                        {tx.senderName && <p className="text-xs text-[var(--muted)]">From: <span className="text-white">{tx.senderName}</span></p>}
+                        {tx.receiverName && <p className="text-xs text-[var(--muted)]">To: <span className="text-white">{tx.receiverName}</span></p>}
+                        {tx.description && <p className="text-xs text-[var(--muted)]">{tx.description}</p>}
+                        <p className="text-xs text-[var(--muted)]">{txDisplayDate(tx)}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className={`text-sm font-semibold ${tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}`}>
-                        {tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString("en-US",{minimumFractionDigits:2})}
+                      <p className={`text-sm font-semibold ${isDebit ? "text-red-400" : "text-emerald-400"}`}>
+                        {isDebit ? "-" : "+"}${tx.amount.toLocaleString("en-US",{minimumFractionDigits:2})}
                       </p>
                       <p className="text-xs text-[var(--muted)]">{tx.currency}</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>{tx.status}</span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-12 text-[var(--muted)]">

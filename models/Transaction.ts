@@ -7,6 +7,9 @@ export interface ITransaction extends Document {
   currency: string;
   status: "pending" | "completed" | "failed";
   description: string;
+  senderName: string;
+  receiverName: string;
+  transactionDate: Date | null;
   createdAt: Date;
 }
 
@@ -16,8 +19,11 @@ const TransactionSchema = new Schema<ITransaction>(
     type: { type: String, enum: ["deposit", "withdrawal", "transfer", "grant", "donation"], required: true },
     amount: { type: Number, required: true },
     currency: { type: String, default: "USD" },
-    status: { type: String, enum: ["pending", "completed", "failed"], default: "pending" },
+    status: { type: String, enum: ["pending", "completed", "failed"], default: "completed" },
     description: { type: String, default: "" },
+    senderName: { type: String, default: "" },
+    receiverName: { type: String, default: "" },
+    transactionDate: { type: Date, default: null },
   },
   { timestamps: true }
 );
