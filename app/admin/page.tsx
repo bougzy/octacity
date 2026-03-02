@@ -29,6 +29,18 @@ interface Transaction {
   receiverName?: string;
   transactionDate?: string;
   createdAt: string;
+  // Transfer specific fields
+  recipientFullName?: string;
+  recipientBankName?: string;
+  bankAddress?: string;
+  routingNumber?: string;
+  accountNumber?: string;
+  accountType?: "checking" | "savings";
+  recipientAddress?: string;
+  referenceMemo?: string;
+  // Admin approval fields
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
 interface ChatConversation {
@@ -476,7 +488,7 @@ export default function AdminPage() {
         )}
 
         {/* TRANSACTIONS */}
-        {activeTab === "transactions" && (
+        {/* {activeTab === "transactions" && (
           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">All Transactions ({transactions.length})</h2>
@@ -516,7 +528,128 @@ export default function AdminPage() {
               </table></div>
             ) : <p className="text-center py-12 text-[var(--muted)]">No transactions yet. Click &quot;+ Add Transaction&quot; to add transaction history for a user.</p>}
           </div>
-        )}
+          
+        )} */}
+
+        {/* Pending Approvals Section */}
+{transactions.filter((tx: Transaction) => tx.status === "pending" || tx.status === "processing").length > 0 && (
+  <div className="mb-8">
+    <h3 className="text-lg font-semibold mb-4 text-amber-400 flex items-center gap-2">
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      Pending Approvals ({transactions.filter((tx: Transaction) => tx.status === "pending" || tx.status === "processing").length})
+    </h3>
+    <div className="space-y-4">
+      {transactions
+        .filter((tx: Transaction) => tx.status === "pending" || tx.status === "processing")
+        .map((tx: Transaction) => (
+          <div key={tx._id} className="bg-amber-500/5 border border-amber-500/30 rounded-xl p-5 hover:bg-amber-500/10 transition-all">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    tx.status === "processing" 
+                      ? "bg-blue-500/10 text-blue-400" 
+                      : "bg-amber-500/10 text-amber-400"
+                  }`}>
+                    {tx.status === "processing" ? "Processing" : "Pending"}
+                  </span>
+                  <span className="text-xs text-[var(--muted)] capitalize">
+                    {new Date(tx.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                
+                <p className="text-sm font-medium mb-1">
+                  {typeof tx.userId === "object" ? tx.userId.fullName : "User"} • 
+                  <span className={tx.type === "transfer" || tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}>
+                    {" "}{tx.type === "transfer" || tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString()} {tx.currency}
+                  </span>
+                </p>
+                
+                <p className="text-xs text-[var(--muted)] capitalize mb-2">Type: {tx.type}</p>
+                
+                {/* Transfer Details */}
+                {tx.type === "transfer" && (
+                  <div className="mt-3 p-3 bg-[var(--background)] rounded-lg space-y-1.5 text-xs">
+                    <p><span className="text-[var(--muted)]">Recipient:</span> {tx.recipientFullName}</p>
+                    <p><span className="text-[var(--muted)]">Bank:</span> {tx.recipientBankName}</p>
+                    <p><span className="text-[var(--muted)]">Account:</span> {tx.accountNumber}</p>
+                    <p><span className="text-[var(--muted)]">Routing:</span> {tx.routingNumber}</p>
+                    {tx.referenceMemo && (
+                      <p><span className="text-[var(--muted)]">Memo:</span> {tx.referenceMemo}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Deposit/Withdrawal Details */}
+                {(tx.type === "deposit" || tx.type === "withdrawal") && (
+                  <div className="mt-2 text-xs text-[var(--muted)]">
+                    {tx.description && <p>Note: {tx.description}</p>}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 md:flex-col lg:flex-row">
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/transactions", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ 
+                          transactionId: tx._id, 
+                          status: "completed" 
+                        })
+                      });
+                      if (res.ok) {
+                        await fetchTransactions();
+                        await fetchUsers();
+                      }
+                    } catch (error) {
+                      console.error("Failed to approve transaction:", error);
+                    }
+                  }}
+                  className="bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-500/20 hover:scale-105 transition-all flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Approve
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/transactions", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ 
+                          transactionId: tx._id, 
+                          status: "failed" 
+                        })
+                      });
+                      if (res.ok) {
+                        await fetchTransactions();
+                      }
+                    } catch (error) {
+                      console.error("Failed to reject transaction:", error);
+                    }
+                  }}
+                  className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-500/20 hover:scale-105 transition-all flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+    </div>
+  </div>
+)}
 
         {/* MESSAGES */}
         {activeTab === "messages" && (
