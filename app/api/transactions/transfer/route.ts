@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        message: "Transfer initiated successfully. Awaiting admin approval.",
+        message: "Transfer initiated successfully. Awaiting approval.",
         transaction,
         status: "processing",
       },
