@@ -173,7 +173,10 @@ export async function GET(req: NextRequest) {
           .sort({ transactionDate: -1, createdAt: -1 });
       }
     } else {
-      transactions = await Transaction.find({ userId: decoded.userId }).sort({ transactionDate: -1, createdAt: -1 });
+      transactions = await Transaction.find({ userId: decoded.userId }).sort({
+        transactionDate: -1,
+        createdAt: -1,
+      });
     }
 
     return NextResponse.json({ transactions });
@@ -182,7 +185,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - Admin creates a transaction
+// POST - Admin creates a transaction manually
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -231,7 +234,8 @@ export async function POST(req: NextRequest) {
 
     // Update user balance if updateBalance !== false and status is completed
     if (updateBalance !== false && txStatus === "completed") {
-      const balanceChange = type === "withdrawal" || type === "transfer" ? -amount : amount;
+      const balanceChange =
+        type === "withdrawal" || type === "donation" || type === "transfer" ? -amount : amount;
       await User.findByIdAndUpdate(userId, { $inc: { balance: balanceChange } });
     }
 
@@ -243,7 +247,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PUT - Admin updates transaction status (Approve/Reject)
+// PUT - Admin approves or rejects a pending/processing transaction
 export async function PUT(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -260,38 +264,57 @@ export async function PUT(req: NextRequest) {
 
     const { transactionId, status } = await req.json();
 
+    if (!transactionId || !status) {
+      return NextResponse.json({ error: "transactionId and status are required" }, { status: 400 });
+    }
+
     const transaction = await Transaction.findById(transactionId);
     if (!transaction) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    // If transitioning to completed, update balance
-    if (status === "completed" && transaction.status !== "completed") {
-      // For transfers, deduct the amount from user's balance
-      if (transaction.type === "transfer") {
-        await User.findByIdAndUpdate(transaction.userId, { 
-          $inc: { balance: -transaction.amount } 
+    const previousStatus = transaction.status;
+
+    // Only act if the transaction was pending/processing (not already resolved)
+    if (previousStatus !== "processing" && previousStatus !== "pending") {
+      return NextResponse.json(
+        { error: "Transaction has already been resolved" },
+        { status: 400 }
+      );
+    }
+
+    if (status === "completed") {
+      // Transfer: balance was already deducted on creation — nothing more to do
+      // For deposit/grant types created by admin with processing status — credit the user
+      if (transaction.type === "deposit" || transaction.type === "grant") {
+        await User.findByIdAndUpdate(transaction.userId, {
+          $inc: { balance: transaction.amount },
         });
-      } else {
-        // For other transaction types (deposit, withdrawal)
-        const balanceChange = transaction.type === "withdrawal" ? -transaction.amount : transaction.amount;
-        await User.findByIdAndUpdate(transaction.userId, { $inc: { balance: balanceChange } });
       }
-      
-      // Set approval details
-      transaction.approvedBy = decoded.userId;
+      // Transfers/withdrawals: already deducted, just mark complete
+    } else if (status === "failed") {
+      // Refund: return money to user for transfers and withdrawals that were deducted
+      if (
+        transaction.type === "transfer" ||
+        transaction.type === "withdrawal"
+      ) {
+        await User.findByIdAndUpdate(transaction.userId, {
+          $inc: { balance: transaction.amount },
+        });
+      }
+    }
+
+    // Update transaction status and set approval metadata
+    transaction.status = status;
+    if (status === "completed") {
+      transaction.approvedBy = decoded.userId as any;
       transaction.approvedAt = new Date();
     }
-    
-    // If rejecting, no balance change (since it was never deducted)
-    // Just mark as failed
-
-    transaction.status = status;
     await transaction.save();
 
     return NextResponse.json({ transaction });
   } catch (error) {
-    console.error("Error updating transaction:", error);
+    console.error("Transaction update error:", error);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
