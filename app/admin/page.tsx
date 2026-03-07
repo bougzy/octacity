@@ -1,1001 +1,3 @@
-// "use client";
-
-// import { useEffect, useState, useCallback } from "react";
-// import { useRouter } from "next/navigation";
-// import Link from "next/link";
-
-// interface User {
-//   _id: string;
-//   fullName: string;
-//   email: string;
-//   phone: string;
-//   address: string;
-//   role: string;
-//   balance: number;
-//   currency: string;
-//   isVerified: boolean;
-//   createdAt: string;
-// }
-
-// interface Transaction {
-//   _id: string;
-//   userId: { _id: string; fullName: string; email: string } | string;
-//   type: string;
-//   amount: number;
-//   currency: string;
-//   status: string;
-//   description: string;
-//   senderName?: string;
-//   receiverName?: string;
-//   transactionDate?: string;
-//   createdAt: string;
-//   // Transfer specific fields
-//   recipientFullName?: string;
-//   recipientBankName?: string;
-//   bankAddress?: string;
-//   routingNumber?: string;
-//   accountNumber?: string;
-//   accountType?: "checking" | "savings";
-//   recipientAddress?: string;
-//   referenceMemo?: string;
-//   // Admin approval fields
-//   approvedBy?: string;
-//   approvedAt?: string;
-// }
-
-// interface ChatConversation {
-//   _id: string;
-//   lastMessage: string;
-//   lastDate: string;
-//   senderName: string;
-//   unreadCount: number;
-//   user?: { fullName: string; email: string };
-// }
-
-// interface ChatMessage {
-//   _id: string;
-//   senderId: string;
-//   receiverId: string;
-//   senderRole: string;
-//   senderName: string;
-//   content: string;
-//   isRead: boolean;
-//   createdAt: string;
-// }
-
-// const defaultTxForm = {
-//   type: "deposit",
-//   amount: "",
-//   currency: "USD",
-//   senderName: "",
-//   receiverName: "",
-//   transactionDate: "",
-//   description: "",
-//   status: "completed",
-//   updateBalance: true,
-// };
-
-// function txDisplayDate(tx: Transaction) {
-//   const d = tx.transactionDate || tx.createdAt;
-//   return new Date(d).toLocaleString();
-// }
-
-// export default function AdminPage() {
-//   const router = useRouter();
-//   const [users, setUsers] = useState<User[]>([]);
-//   const [admin, setAdmin] = useState<User | null>(null);
-//   const [loading, setLoading] = useState(true);
-//   const [activeTab, setActiveTab] = useState("dashboard");
-//   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-//   // Migration state
-//   const [migrating, setMigrating] = useState(false);
-
-//   // Balance modal
-//   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-//   const [editBalance, setEditBalance] = useState("");
-//   const [showBalanceModal, setShowBalanceModal] = useState(false);
-//   const [balanceAction, setBalanceAction] = useState<"set" | "deposit" | "withdraw">("deposit");
-//   const [txDescription, setTxDescription] = useState("");
-
-//   // Transaction History modal
-//   const [showTxModal, setShowTxModal] = useState(false);
-//   const [txModalUser, setTxModalUser] = useState<User | null>(null);
-//   const [txForm, setTxForm] = useState({ ...defaultTxForm });
-
-//   // Transactions
-//   const [transactions, setTransactions] = useState<Transaction[]>([]);
-//   // Per-user transactions (for the history modal preview)
-//   const [userTxHistory, setUserTxHistory] = useState<Transaction[]>([]);
-//   const [viewingUserHistory, setViewingUserHistory] = useState<User | null>(null);
-
-//   // Chat
-//   const [conversations, setConversations] = useState<ChatConversation[]>([]);
-//   const [chatUser, setChatUser] = useState<ChatConversation | null>(null);
-//   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-//   const [chatInput, setChatInput] = useState("");
-
-//   const fetchUsers = useCallback(async () => {
-//     const res = await fetch("/api/users");
-//     if (res.ok) { const d = await res.json(); setUsers(d.users || []); }
-//   }, []);
-
-//   const fetchTransactions = useCallback(async () => {
-//     const res = await fetch("/api/transactions");
-//     if (res.ok) { const d = await res.json(); setTransactions(d.transactions || []); }
-//   }, []);
-
-//   const fetchConversations = useCallback(async () => {
-//     const res = await fetch("/api/messages");
-//     if (res.ok) { const d = await res.json(); setConversations(d.messages || []); }
-//   }, []);
-
-//   const fetchUserHistory = useCallback(async (userId: string) => {
-//     const res = await fetch(`/api/transactions?userId=${userId}`);
-//     if (res.ok) { const d = await res.json(); setUserTxHistory(d.transactions || []); }
-//   }, []);
-
-//   // Migration function
-//   const runAccountNumberMigration = async () => {
-//     if (!confirm("This will add account numbers to all users without them. Continue?")) return;
-    
-//     setMigrating(true);
-//     try {
-//       const res = await fetch("/api/migrate-account-numbers", { method: "POST" });
-//       const data = await res.json();
-//       alert(data.message || "Migration completed");
-//       await fetchUsers(); // Refresh users list
-//     } catch (error) {
-//       alert("Migration failed");
-//     } finally {
-//       setMigrating(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     Promise.all([
-//       fetch("/api/auth/me").then(r => r.json()),
-//       fetch("/api/users").then(r => r.json()),
-//       fetch("/api/transactions").then(r => r.json()),
-//       fetch("/api/messages").then(r => r.json()),
-//     ])
-//       .then(([me, u, tx, msg]) => {
-//         if (me.user?.role !== "admin") { router.push("/dashboard"); return; }
-//         setAdmin(me.user);
-//         setUsers(u.users || []);
-//         setTransactions(tx.transactions || []);
-//         setConversations(msg.messages || []);
-//       })
-//       .catch(() => router.push("/login"))
-//       .finally(() => setLoading(false));
-//   }, [router]);
-
-//   useEffect(() => {
-//     if (activeTab !== "messages") return;
-//     const iv = setInterval(fetchConversations, 5000);
-//     return () => clearInterval(iv);
-//   }, [activeTab, fetchConversations]);
-
-//   useEffect(() => {
-//     if (!chatUser) return;
-//     const fetchChat = async () => {
-//       const res = await fetch(`/api/messages?userId=${chatUser._id}`);
-//       if (res.ok) { const d = await res.json(); setChatMessages(d.messages || []); }
-//     };
-//     fetchChat();
-//     const iv = setInterval(fetchChat, 3000);
-//     return () => clearInterval(iv);
-//   }, [chatUser]);
-
-//   const handleLogout = async () => {
-//     await fetch("/api/auth/logout", { method: "POST" });
-//     router.push("/login");
-//   };
-
-//   const updateUser = async (userId: string, updates: Record<string, unknown>) => {
-//     const res = await fetch("/api/users", {
-//       method: "PUT",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ userId, ...updates }),
-//     });
-//     if (res.ok) await fetchUsers();
-//   };
-
-//   const handleBalanceUpdate = async () => {
-//     if (!selectedUser || !editBalance) return;
-//     const amount = parseFloat(editBalance);
-//     if (isNaN(amount) || amount <= 0) return;
-
-//     if (balanceAction === "set") {
-//       await updateUser(selectedUser._id, { balance: amount });
-//     } else {
-//       await fetch("/api/transactions", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({
-//           userId: selectedUser._id,
-//           type: balanceAction === "deposit" ? "deposit" : "withdrawal",
-//           amount,
-//           description: txDescription || `Admin ${balanceAction}`,
-//           status: "completed",
-//           updateBalance: true,
-//         }),
-//       });
-//       await fetchUsers();
-//       await fetchTransactions();
-//     }
-//     setShowBalanceModal(false);
-//     setEditBalance("");
-//     setTxDescription("");
-//     setSelectedUser(null);
-//   };
-
-//   const openTxModal = (user: User) => {
-//     setTxModalUser(user);
-//     setTxForm({ ...defaultTxForm });
-//     fetchUserHistory(user._id);
-//     setShowTxModal(true);
-//   };
-
-//   const openUserHistory = (user: User) => {
-//     setViewingUserHistory(user);
-//     fetchUserHistory(user._id);
-//   };
-
-//   const handleAddTransaction = async () => {
-//     if (!txModalUser || !txForm.amount) return;
-//     const amount = parseFloat(txForm.amount);
-//     if (isNaN(amount) || amount <= 0) return;
-
-//     await fetch("/api/transactions", {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({
-//         userId: txModalUser._id,
-//         type: txForm.type,
-//         amount,
-//         currency: txForm.currency,
-//         senderName: txForm.senderName,
-//         receiverName: txForm.receiverName,
-//         transactionDate: txForm.transactionDate || undefined,
-//         description: txForm.description,
-//         status: txForm.status,
-//         updateBalance: txForm.updateBalance,
-//       }),
-//     });
-
-//     await fetchUsers();
-//     await fetchTransactions();
-//     await fetchUserHistory(txModalUser._id);
-//     // Reset form but keep modal open so admin can add more
-//     setTxForm({ ...defaultTxForm });
-//   };
-
-//   const sendAdminMessage = async () => {
-//     if (!chatInput.trim() || !chatUser) return;
-//     await fetch("/api/messages", {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ content: chatInput.trim(), receiverId: chatUser._id }),
-//     });
-//     setChatInput("");
-//     const res = await fetch(`/api/messages?userId=${chatUser._id}`);
-//     if (res.ok) { const d = await res.json(); setChatMessages(d.messages || []); }
-//     await fetch("/api/messages", {
-//       method: "PUT",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ userId: chatUser._id }),
-//     });
-//   };
-
-//   if (loading) {
-//     return (
-//       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
-//         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-//       </div>
-//     );
-//   }
-//   if (!admin) return null;
-
-//   const totalBalance = users.reduce((s, u) => s + u.balance, 0);
-//   const verifiedUsers = users.filter(u => u.isVerified).length;
-//   const totalUnread = conversations.reduce((s, c) => s + c.unreadCount, 0);
-
-//   const navItems = [
-//     { id: "dashboard", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6", badge: 0 },
-//     { id: "users", label: "Manage Users", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z", badge: 0 },
-//     { id: "transactions", label: "Transactions", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", badge: 0 },
-//     { id: "messages", label: "Messages", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", badge: totalUnread },
-//   ];
-
-//   const showSenderField = ["deposit", "transfer", "grant"].includes(txForm.type);
-//   const showReceiverField = ["withdrawal", "transfer", "donation"].includes(txForm.type);
-
-//   return (
-//     <div className="min-h-screen bg-[var(--background)] font-[family-name:var(--font-geist-sans)]">
-//       <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden fixed top-4 left-4 z-50 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg p-2">
-//         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-//       </button>
-
-//       {/* Sidebar */}
-//       <aside className={`fixed top-0 left-0 h-full w-64 bg-[var(--card-bg)] border-r border-[var(--card-border)] z-40 transform transition-transform lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-//         <div className="p-6">
-//           <Link href="/" className="flex items-center gap-2 mb-2">
-//             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center"><span className="text-white font-bold text-sm">OC</span></div>
-//             <span className="text-lg font-bold gradient-text">Octa City Bank</span>
-//           </Link>
-//           <p className="text-xs text-red-400 font-medium mb-8 ml-10">Admin Panel</p>
-//           <nav className="space-y-1">
-//             {navItems.map(item => (
-//               <button key={item.id} onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-//                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm transition-colors ${activeTab === item.id ? "bg-blue-500/10 text-blue-400" : "text-[var(--muted)] hover:text-white hover:bg-[var(--background)]"}`}>
-//                 <div className="flex items-center gap-3">
-//                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} /></svg>
-//                   {item.label}
-//                 </div>
-//                 {item.badge > 0 && <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{item.badge}</span>}
-//               </button>
-//             ))}
-//           </nav>
-//         </div>
-//         <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-[var(--card-border)]">
-//           <p className="text-xs text-[var(--muted)] mb-3">Signed in as <span className="text-white">{admin.fullName}</span></p>
-//           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors">
-//             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-//             Sign Out
-//           </button>
-//         </div>
-//       </aside>
-
-//       <main className="lg:ml-64 p-6 pt-16 lg:pt-6">
-//         <div className="mb-8">
-//           <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-//           <p className="text-[var(--muted)] text-sm">Manage users, balances, transactions, and messages</p>
-//         </div>
-
-//         {/* DASHBOARD */}
-//         {activeTab === "dashboard" && (<>
-//           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-//             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-//               <div className="flex items-center justify-between">
-//                 <p className="text-[var(--muted)] text-sm mb-1">Total Users</p>
-//                 {/* Migration button moved here */}
-//                 <button
-//                   onClick={runAccountNumberMigration}
-//                   disabled={migrating}
-//                   className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg text-xs hover:bg-blue-500/20 ml-2 disabled:opacity-50"
-//                 >
-//                   {migrating ? "Adding..." : "Add Account Numbers"}
-//                 </button>
-//               </div>
-//               <p className="text-3xl font-bold gradient-text">{users.length}</p>
-//             </div>
-//             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-//               <p className="text-[var(--muted)] text-sm mb-1">Verified</p>
-//               <p className="text-3xl font-bold text-emerald-400">{verifiedUsers}</p>
-//             </div>
-//             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-//               <p className="text-[var(--muted)] text-sm mb-1">Total Managed</p>
-//               <p className="text-3xl font-bold gradient-text">${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-//             </div>
-//             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-//               <p className="text-[var(--muted)] text-sm mb-1">Unread Messages</p>
-//               <p className="text-3xl font-bold text-amber-400">{totalUnread}</p>
-//             </div>
-//           </div>
-
-//           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6 mb-6">
-//             <div className="flex items-center justify-between mb-4">
-//               <h2 className="text-lg font-semibold">Recent Users</h2>
-//               <button onClick={() => setActiveTab("users")} className="text-blue-400 text-sm hover:underline">View All →</button>
-//             </div>
-//             <div className="overflow-x-auto">
-//               <table className="w-full text-sm">
-//                 <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
-//                   <th className="pb-3 font-medium">Name</th><th className="pb-3 font-medium">Email</th><th className="pb-3 font-medium">Balance</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Joined</th>
-//                 </tr></thead>
-//                 <tbody>
-//                   {users.slice(0, 5).map(u => (
-//                     <tr key={u._id} className="border-b border-[var(--card-border)] last:border-0">
-//                       <td className="py-3 font-medium">{u.fullName}</td>
-//                       <td className="py-3 text-[var(--muted)]">{u.email}</td>
-//                       <td className="py-3 font-medium">${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-//                       <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${u.isVerified ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>{u.isVerified ? "Verified" : "Pending"}</span></td>
-//                       <td className="py-3 text-[var(--muted)]">{new Date(u.createdAt).toLocaleDateString()}</td>
-//                     </tr>
-//                   ))}
-//                 </tbody>
-//               </table>
-//               {users.length === 0 && <p className="text-center py-8 text-[var(--muted)]">No users yet</p>}
-//             </div>
-//           </div>
-
-//           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-//             <div className="flex items-center justify-between mb-4">
-//               <h2 className="text-lg font-semibold">Recent Transactions</h2>
-//               <button onClick={() => setActiveTab("transactions")} className="text-blue-400 text-sm hover:underline">View All →</button>
-//             </div>
-//             {transactions.length > 0 ? (
-//               <div className="overflow-x-auto"><table className="w-full text-sm">
-//                 <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
-//                   <th className="pb-3 font-medium">User</th><th className="pb-3 font-medium">Type</th><th className="pb-3 font-medium">Amount</th><th className="pb-3 font-medium">Sender / Receiver</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Date</th>
-//                 </tr></thead>
-//                 <tbody>{transactions.slice(0, 5).map(tx => (
-//                   <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0">
-//                     <td className="py-3">{typeof tx.userId === "object" ? tx.userId.fullName : "—"}</td>
-//                     <td className="py-3 capitalize">{tx.type}</td>
-//                     <td className={`py-3 font-medium ${tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}`}>{tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString()}</td>
-//                     <td className="py-3 text-[var(--muted)] text-xs">{tx.senderName || tx.receiverName || "—"}</td>
-//                     <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>{tx.status}</span></td>
-//                     <td className="py-3 text-[var(--muted)]">{txDisplayDate(tx)}</td>
-//                   </tr>
-//                 ))}</tbody>
-//               </table></div>
-//             ) : <p className="text-center py-8 text-[var(--muted)]">No transactions yet</p>}
-//           </div>
-//         </>)}
-
-//         {/* USERS */}
-//         {activeTab === "users" && (
-//           <div className="space-y-6">
-//             {/* User history panel */}
-//             {viewingUserHistory && (
-//               <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-//                 <div className="flex items-center justify-between mb-4">
-//                   <div>
-//                     <h2 className="text-lg font-semibold">Transaction History — {viewingUserHistory.fullName}</h2>
-//                     <p className="text-xs text-[var(--muted)]">{viewingUserHistory.email} · Current balance: <span className="text-white font-medium">${viewingUserHistory.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></p>
-//                   </div>
-//                   <button onClick={() => { setViewingUserHistory(null); setUserTxHistory([]); }} className="text-[var(--muted)] hover:text-white text-sm">Close ×</button>
-//                 </div>
-//                 {userTxHistory.length > 0 ? (
-//                   <div className="overflow-x-auto">
-//                     <table className="w-full text-sm">
-//                       <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
-//                         <th className="pb-3 font-medium">Type</th>
-//                         <th className="pb-3 font-medium">Amount</th>
-//                         <th className="pb-3 font-medium">Sender / Receiver</th>
-//                         <th className="pb-3 font-medium">Description</th>
-//                         <th className="pb-3 font-medium">Status</th>
-//                         <th className="pb-3 font-medium">Date</th>
-//                       </tr></thead>
-//                       <tbody>{userTxHistory.map(tx => (
-//                         <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0">
-//                           <td className="py-3 capitalize font-medium">{tx.type}</td>
-//                           <td className={`py-3 font-bold ${tx.type === "withdrawal" || tx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
-//                             {tx.type === "withdrawal" || tx.type === "donation" ? "-" : "+"}${tx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {tx.currency}
-//                           </td>
-//                           <td className="py-3 text-[var(--muted)]">
-//                             {tx.senderName && <span className="block text-xs">From: {tx.senderName}</span>}
-//                             {tx.receiverName && <span className="block text-xs">To: {tx.receiverName}</span>}
-//                             {!tx.senderName && !tx.receiverName && "—"}
-//                           </td>
-//                           <td className="py-3 text-[var(--muted)] text-xs">{tx.description || "—"}</td>
-//                           <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>{tx.status}</span></td>
-//                           <td className="py-3 text-[var(--muted)] text-xs">{txDisplayDate(tx)}</td>
-//                         </tr>
-//                       ))}</tbody>
-//                     </table>
-//                   </div>
-//                 ) : <p className="text-center py-6 text-[var(--muted)] text-sm">No transaction history for this user yet.</p>}
-//               </div>
-//             )}
-
-//             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-//               <h2 className="text-lg font-semibold mb-4">All Users ({users.length})</h2>
-//               <div className="overflow-x-auto"><table className="w-full text-sm">
-//                 <thead><tr className="text-left text-[var(--muted)] border-b border-[var(--card-border)]">
-//                   <th className="pb-3 font-medium">Name</th><th className="pb-3 font-medium">Email</th><th className="pb-3 font-medium">Balance</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Role</th><th className="pb-3 font-medium">Actions</th>
-//                 </tr></thead>
-//                 <tbody>{users.map(u => (
-//                   <tr key={u._id} className="border-b border-[var(--card-border)] last:border-0">
-//                     <td className="py-3"><p className="font-medium">{u.fullName}</p><p className="text-xs text-[var(--muted)]">{u.phone}</p></td>
-//                     <td className="py-3 text-[var(--muted)]">{u.email}</td>
-//                     <td className="py-3 font-medium">${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-//                     <td className="py-3"><span className={`text-xs px-2 py-1 rounded-full ${u.isVerified ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>{u.isVerified ? "Verified" : "Pending"}</span></td>
-//                     <td className="py-3 capitalize text-[var(--muted)]">{u.role}</td>
-//                     <td className="py-3">
-//                       <div className="flex flex-wrap gap-2">
-//                         <button onClick={() => { setSelectedUser(u); setShowBalanceModal(true); setEditBalance(""); setTxDescription(""); }}
-//                           className="text-xs bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg hover:bg-blue-500/20">Update Balance</button>
-//                         <button onClick={() => openTxModal(u)}
-//                           className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-lg hover:bg-emerald-500/20">+ Add History</button>
-//                         <button onClick={() => openUserHistory(u)}
-//                           className="text-xs bg-purple-500/10 text-purple-400 px-3 py-1 rounded-lg hover:bg-purple-500/20">View History</button>
-//                         <button onClick={() => updateUser(u._id, { isVerified: !u.isVerified })}
-//                           className={`text-xs px-3 py-1 rounded-lg ${u.isVerified ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`}>{u.isVerified ? "Unverify" : "Verify"}</button>
-//                         {u.role !== "admin" && <button onClick={() => updateUser(u._id, { role: "admin" })} className="text-xs bg-pink-500/10 text-pink-400 px-3 py-1 rounded-lg hover:bg-pink-500/20">Make Admin</button>}
-//                         <button onClick={() => { setChatUser({ _id: u._id, lastMessage: "", lastDate: "", senderName: u.fullName, unreadCount: 0, user: { fullName: u.fullName, email: u.email } }); setActiveTab("messages"); }}
-//                           className="text-xs bg-cyan-500/10 text-cyan-400 px-3 py-1 rounded-lg hover:bg-cyan-500/20">Message</button>
-//                       </div>
-//                     </td>
-//                   </tr>
-//                 ))}</tbody>
-//               </table></div>
-//               {users.length === 0 && <p className="text-center py-8 text-[var(--muted)]">No users yet</p>}
-//             </div>
-//           </div>
-//         )}
-
-//         {/* Pending Approvals Section */}
-//         {transactions.filter((tx: Transaction) => tx.status === "pending" || tx.status === "processing").length > 0 && (
-//           <div className="mb-8">
-//             <h3 className="text-lg font-semibold mb-4 text-amber-400 flex items-center gap-2">
-//               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-//                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-//               </svg>
-//               Pending Approvals ({transactions.filter((tx: Transaction) => tx.status === "pending" || tx.status === "processing").length})
-//             </h3>
-//             <div className="space-y-4">
-//               {transactions
-//                 .filter((tx: Transaction) => tx.status === "pending" || tx.status === "processing")
-//                 .map((tx: Transaction) => (
-//                   <div key={tx._id} className="bg-amber-500/5 border border-amber-500/30 rounded-xl p-5 hover:bg-amber-500/10 transition-all">
-//                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-//                       <div className="flex-1">
-//                         <div className="flex items-center gap-3 mb-2">
-//                           <span className={`text-xs px-2 py-1 rounded-full ${
-//                             tx.status === "processing" 
-//                               ? "bg-blue-500/10 text-blue-400" 
-//                               : "bg-amber-500/10 text-amber-400"
-//                           }`}>
-//                             {tx.status === "processing" ? "Processing" : "Pending"}
-//                           </span>
-//                           <span className="text-xs text-[var(--muted)] capitalize">
-//                             {new Date(tx.createdAt).toLocaleDateString()}
-//                           </span>
-//                         </div>
-                        
-//                         <p className="text-sm font-medium mb-1">
-//                           {typeof tx.userId === "object" ? tx.userId.fullName : "User"} • 
-//                           <span className={tx.type === "transfer" || tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}>
-//                             {" "}{tx.type === "transfer" || tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString()} {tx.currency}
-//                           </span>
-//                         </p>
-                        
-//                         <p className="text-xs text-[var(--muted)] capitalize mb-2">Type: {tx.type}</p>
-                        
-//                         {/* Transfer Details */}
-//                         {tx.type === "transfer" && (
-//                           <div className="mt-3 p-3 bg-[var(--background)] rounded-lg space-y-1.5 text-xs">
-//                             <p><span className="text-[var(--muted)]">Recipient:</span> {tx.recipientFullName}</p>
-//                             <p><span className="text-[var(--muted)]">Bank:</span> {tx.recipientBankName}</p>
-//                             <p><span className="text-[var(--muted)]">Account:</span> {tx.accountNumber}</p>
-//                             <p><span className="text-[var(--muted)]">Routing:</span> {tx.routingNumber}</p>
-//                             {tx.referenceMemo && (
-//                               <p><span className="text-[var(--muted)]">Memo:</span> {tx.referenceMemo}</p>
-//                             )}
-//                           </div>
-//                         )}
-
-//                         {/* Deposit/Withdrawal Details */}
-//                         {(tx.type === "deposit" || tx.type === "withdrawal") && (
-//                           <div className="mt-2 text-xs text-[var(--muted)]">
-//                             {tx.description && <p>Note: {tx.description}</p>}
-//                           </div>
-//                         )}
-//                       </div>
-
-//                       {/* Action Buttons */}
-//                       <div className="flex gap-2 md:flex-col lg:flex-row">
-//                         <button
-//                           onClick={async () => {
-//                             try {
-//                               const res = await fetch("/api/transactions", {
-//                                 method: "PUT",
-//                                 headers: { "Content-Type": "application/json" },
-//                                 body: JSON.stringify({ 
-//                                   transactionId: tx._id, 
-//                                   status: "completed" 
-//                                 })
-//                               });
-//                               if (res.ok) {
-//                                 await fetchTransactions();
-//                                 await fetchUsers();
-//                               }
-//                             } catch (error) {
-//                               console.error("Failed to approve transaction:", error);
-//                             }
-//                           }}
-//                           className="bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-500/20 hover:scale-105 transition-all flex items-center gap-2"
-//                         >
-//                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-//                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-//                           </svg>
-//                           Approve
-//                         </button>
-//                         <button
-//                           onClick={async () => {
-//                             try {
-//                               const res = await fetch("/api/transactions", {
-//                                 method: "PUT",
-//                                 headers: { "Content-Type": "application/json" },
-//                                 body: JSON.stringify({ 
-//                                   transactionId: tx._id, 
-//                                   status: "failed" 
-//                                 })
-//                               });
-//                               if (res.ok) {
-//                                 await fetchTransactions();
-//                               }
-//                             } catch (error) {
-//                               console.error("Failed to reject transaction:", error);
-//                             }
-//                           }}
-//                           className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-500/20 hover:scale-105 transition-all flex items-center gap-2"
-//                         >
-//                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-//                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-//                           </svg>
-//                           Reject
-//                         </button>
-//                       </div>
-//                     </div>
-//                   </div>
-//                 ))}
-//             </div>
-//           </div>
-//         )}
-
-//         {/* MESSAGES */}
-//         {activeTab === "messages" && (
-//           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ height: "calc(100vh - 140px)" }}>
-//             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl overflow-hidden flex flex-col">
-//               <div className="p-4 border-b border-[var(--card-border)]"><h2 className="text-sm font-semibold">Conversations</h2></div>
-//               <div className="flex-1 overflow-y-auto">
-//                 {conversations.map(conv => (
-//                   <button key={conv._id.toString()} onClick={() => { setChatUser(conv); fetch("/api/messages", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: conv._id }) }); }}
-//                     className={`w-full text-left p-4 border-b border-[var(--card-border)] hover:bg-[var(--background)] transition-colors ${chatUser?._id === conv._id.toString() ? "bg-[var(--background)]" : ""}`}>
-//                     <div className="flex items-center justify-between mb-1">
-//                       <span className="text-sm font-medium">{conv.user?.fullName || conv.senderName}</span>
-//                       {conv.unreadCount > 0 && <span className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{conv.unreadCount}</span>}
-//                     </div>
-//                     <p className="text-xs text-[var(--muted)] truncate">{conv.lastMessage}</p>
-//                   </button>
-//                 ))}
-//                 {users.filter(u => u.role !== "admin" && !conversations.find(c => c._id.toString() === u._id)).length > 0 && (<>
-//                   <div className="p-3 border-b border-[var(--card-border)]"><p className="text-xs text-[var(--muted)] font-medium">All Users</p></div>
-//                   {users.filter(u => u.role !== "admin" && !conversations.find(c => c._id.toString() === u._id)).map(u => (
-//                     <button key={u._id} onClick={() => setChatUser({ _id: u._id, lastMessage: "", lastDate: "", senderName: u.fullName, unreadCount: 0, user: { fullName: u.fullName, email: u.email } })}
-//                       className={`w-full text-left p-4 border-b border-[var(--card-border)] hover:bg-[var(--background)] transition-colors ${chatUser?._id === u._id ? "bg-[var(--background)]" : ""}`}>
-//                       <span className="text-sm font-medium">{u.fullName}</span>
-//                       <p className="text-xs text-[var(--muted)]">{u.email}</p>
-//                     </button>
-//                   ))}
-//                 </>)}
-//                 {conversations.length === 0 && users.filter(u => u.role !== "admin").length === 0 && <p className="text-center py-8 text-[var(--muted)] text-sm">No users yet</p>}
-//               </div>
-//             </div>
-
-//             <div className="lg:col-span-2 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl overflow-hidden flex flex-col">
-//               {chatUser ? (<>
-//                 <div className="p-4 border-b border-[var(--card-border)] flex items-center gap-3">
-//                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center">
-//                     <span className="text-white text-sm font-medium">{(chatUser.user?.fullName || chatUser.senderName).split(" ").map(n => n[0]).join("")}</span>
-//                   </div>
-//                   <div><p className="text-sm font-semibold">{chatUser.user?.fullName || chatUser.senderName}</p><p className="text-xs text-[var(--muted)]">{chatUser.user?.email || ""}</p></div>
-//                 </div>
-//                 <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: "calc(100vh - 340px)" }}>
-//                   {chatMessages.map(msg => (
-//                     <div key={msg._id} className={`flex ${msg.senderRole === "admin" ? "justify-end" : "justify-start"}`}>
-//                       <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${msg.senderRole === "admin" ? "bg-blue-500 text-white rounded-br-md" : "bg-[var(--background)] border border-[var(--card-border)] rounded-bl-md"}`}>
-//                         <p>{msg.content}</p>
-//                         <p className={`text-xs mt-1 ${msg.senderRole === "admin" ? "text-blue-200" : "text-[var(--muted)]"}`}>{new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-//                       </div>
-//                     </div>
-//                   ))}
-//                   {chatMessages.length === 0 && <p className="text-center text-[var(--muted)] text-sm py-8">No messages yet. Start the conversation.</p>}
-//                 </div>
-//                 <div className="border-t border-[var(--card-border)] p-4">
-//                   <div className="flex gap-2">
-//                     <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendAdminMessage()} placeholder="Type a message..."
-//                       className="flex-1 bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500" />
-//                     <button onClick={sendAdminMessage} className="btn-primary text-white px-6 py-2.5 rounded-lg text-sm font-medium">Send</button>
-//                   </div>
-//                 </div>
-//               </>) : (
-//                 <div className="flex-1 flex items-center justify-center text-[var(--muted)]">
-//                   <div className="text-center">
-//                     <svg className="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-//                     <p>Select a conversation to start messaging</p>
-//                   </div>
-//                 </div>
-//               )}
-//             </div>
-//           </div>
-//         )}
-//       </main>
-
-//       {/* Balance Modal */}
-//       {showBalanceModal && selectedUser && (
-//         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-//           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-md">
-//             <div className="flex items-center justify-between mb-6">
-//               <h3 className="text-lg font-semibold">Update Balance</h3>
-//               <button onClick={() => { setShowBalanceModal(false); setSelectedUser(null); }} className="text-[var(--muted)] hover:text-white">
-//                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-//               </button>
-//             </div>
-//             <div className="mb-4 p-3 bg-[var(--background)] rounded-lg">
-//               <p className="text-sm font-medium">{selectedUser.fullName}</p>
-//               <p className="text-xs text-[var(--muted)]">{selectedUser.email}</p>
-//               <p className="text-lg font-bold gradient-text mt-1">Current: ${selectedUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-//             </div>
-//             <div className="space-y-4">
-//               <div>
-//                 <label className="block text-sm font-medium mb-2">Action</label>
-//                 <div className="grid grid-cols-3 gap-2">
-//                   {(["deposit", "withdraw", "set"] as const).map(a => (
-//                     <button key={a} onClick={() => setBalanceAction(a)}
-//                       className={`py-2 rounded-lg text-sm font-medium capitalize ${balanceAction === a ? "bg-blue-500 text-white" : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"}`}>{a}</button>
-//                   ))}
-//                 </div>
-//               </div>
-//               <div>
-//                 <label className="block text-sm font-medium mb-1.5">{balanceAction === "set" ? "New Balance" : "Amount"} (USD)</label>
-//                 <input type="number" value={editBalance} onChange={e => setEditBalance(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500" placeholder="0.00" step="0.01" min="0" />
-//               </div>
-//               {balanceAction !== "set" && (
-//                 <div>
-//                   <label className="block text-sm font-medium mb-1.5">Description</label>
-//                   <input type="text" value={txDescription} onChange={e => setTxDescription(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500" placeholder={`e.g. ${balanceAction === "deposit" ? "Wire transfer received" : "Withdrawal processed"}`} />
-//                 </div>
-//               )}
-//               {editBalance && (
-//                 <div className="p-3 bg-[var(--background)] rounded-lg">
-//                   <p className="text-xs text-[var(--muted)]">New balance will be:</p>
-//                   <p className="text-lg font-bold gradient-text">
-//                     ${(balanceAction === "set" ? parseFloat(editBalance) : balanceAction === "deposit" ? selectedUser.balance + parseFloat(editBalance) : selectedUser.balance - parseFloat(editBalance)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-//                   </p>
-//                 </div>
-//               )}
-//               <div className="flex gap-3">
-//                 <button onClick={() => { setShowBalanceModal(false); setSelectedUser(null); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Cancel</button>
-//                 <button onClick={handleBalanceUpdate} disabled={!editBalance || parseFloat(editBalance) <= 0} className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50">Confirm</button>
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-//       {/* Transaction History Modal */}
-//       {showTxModal && (
-//         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-//           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-2xl my-8">
-//             <div className="flex items-center justify-between mb-6">
-//               <div>
-//                 <h3 className="text-lg font-semibold">Add Transaction History</h3>
-//                 <p className="text-xs text-[var(--muted)] mt-0.5">Create a backdated or custom transaction entry for a user</p>
-//               </div>
-//               <button onClick={() => { setShowTxModal(false); setTxModalUser(null); setUserTxHistory([]); }} className="text-[var(--muted)] hover:text-white">
-//                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-//               </button>
-//             </div>
-
-//             <div className="grid md:grid-cols-2 gap-6">
-//               {/* Left: Form */}
-//               <div className="space-y-4">
-//                 {/* User selector */}
-//                 <div>
-//                   <label className="block text-sm font-medium mb-1.5">Select User</label>
-//                   <select
-//                     value={txModalUser?._id || ""}
-//                     onChange={e => {
-//                       const u = users.find(u => u._id === e.target.value) || null;
-//                       setTxModalUser(u);
-//                       if (u) fetchUserHistory(u._id);
-//                     }}
-//                     className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-//                   >
-//                     <option value="">— Select a user —</option>
-//                     {users.filter(u => u.role !== "admin").map(u => (
-//                       <option key={u._id} value={u._id}>{u.fullName} ({u.email})</option>
-//                     ))}
-//                   </select>
-//                   {txModalUser && (
-//                     <p className="text-xs text-[var(--muted)] mt-1">Current balance: <span className="text-white font-medium">${txModalUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></p>
-//                   )}
-//                 </div>
-
-//                 {/* Type */}
-//                 <div>
-//                   <label className="block text-sm font-medium mb-1.5">Transaction Type</label>
-//                   <select
-//                     value={txForm.type}
-//                     onChange={e => setTxForm({ ...txForm, type: e.target.value, senderName: "", receiverName: "" })}
-//                     className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-//                   >
-//                     <option value="deposit">Deposit</option>
-//                     <option value="withdrawal">Withdrawal</option>
-//                     <option value="transfer">Transfer</option>
-//                     <option value="grant">Grant</option>
-//                     <option value="donation">Donation</option>
-//                   </select>
-//                 </div>
-
-//                 {/* Amount & Currency */}
-//                 <div className="grid grid-cols-2 gap-3">
-//                   <div>
-//                     <label className="block text-sm font-medium mb-1.5">Amount</label>
-//                     <input
-//                       type="number"
-//                       value={txForm.amount}
-//                       onChange={e => setTxForm({ ...txForm, amount: e.target.value })}
-//                       className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-//                       placeholder="0.00"
-//                       step="0.01"
-//                       min="0"
-//                     />
-//                   </div>
-//                   <div>
-//                     <label className="block text-sm font-medium mb-1.5">Currency</label>
-//                     <select
-//                       value={txForm.currency}
-//                       onChange={e => setTxForm({ ...txForm, currency: e.target.value })}
-//                       className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-//                     >
-//                       {["USD", "EUR", "GBP", "BTC", "ETH", "USDT", "BNB", "NGN"].map(c => (
-//                         <option key={c} value={c}>{c}</option>
-//                       ))}
-//                     </select>
-//                   </div>
-//                 </div>
-
-//                 {/* Sender name */}
-//                 {showSenderField && (
-//                   <div>
-//                     <label className="block text-sm font-medium mb-1.5">
-//                       Sender Name <span className="text-[var(--muted)]">(who sent the money)</span>
-//                     </label>
-//                     <input
-//                       type="text"
-//                       value={txForm.senderName}
-//                       onChange={e => setTxForm({ ...txForm, senderName: e.target.value })}
-//                       className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-//                       placeholder="e.g. Bank of America, John Smith, PayPal Inc."
-//                     />
-//                   </div>
-//                 )}
-
-//                 {/* Receiver name */}
-//                 {showReceiverField && (
-//                   <div>
-//                     <label className="block text-sm font-medium mb-1.5">
-//                       Receiver Name <span className="text-[var(--muted)]">(who received the money)</span>
-//                     </label>
-//                     <input
-//                       type="text"
-//                       value={txForm.receiverName}
-//                       onChange={e => setTxForm({ ...txForm, receiverName: e.target.value })}
-//                       className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-//                       placeholder="e.g. Amazon LLC, Jane Doe, Crypto Exchange"
-//                     />
-//                   </div>
-//                 )}
-
-//                 {/* Transaction Date (backdating) */}
-//                 <div>
-//                   <label className="block text-sm font-medium mb-1.5">
-//                     Transaction Date & Time <span className="text-[var(--muted)]">(leave empty for now)</span>
-//                   </label>
-//                   <input
-//                     type="datetime-local"
-//                     value={txForm.transactionDate}
-//                     onChange={e => setTxForm({ ...txForm, transactionDate: e.target.value })}
-//                     className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-//                   />
-//                 </div>
-
-//                 {/* Description */}
-//                 <div>
-//                   <label className="block text-sm font-medium mb-1.5">Description / Memo</label>
-//                   <input
-//                     type="text"
-//                     value={txForm.description}
-//                     onChange={e => setTxForm({ ...txForm, description: e.target.value })}
-//                     className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-//                     placeholder="e.g. Monthly salary, Wire transfer, Grant disbursement..."
-//                   />
-//                 </div>
-
-//                 {/* Status */}
-//                 <div>
-//                   <label className="block text-sm font-medium mb-1.5">Status</label>
-//                   <div className="grid grid-cols-3 gap-2">
-//                     {(["completed", "pending", "failed"] as const).map(s => (
-//                       <button key={s} onClick={() => setTxForm({ ...txForm, status: s })}
-//                         className={`py-2 rounded-lg text-sm font-medium capitalize ${txForm.status === s ? (s === "completed" ? "bg-emerald-500 text-white" : s === "pending" ? "bg-amber-500 text-white" : "bg-red-500 text-white") : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"}`}>{s}</button>
-//                     ))}
-//                   </div>
-//                 </div>
-
-//                 {/* Update balance toggle */}
-//                 <div className="flex items-center justify-between p-3 bg-[var(--background)] rounded-lg">
-//                   <div>
-//                     <p className="text-sm font-medium">Update User Balance</p>
-//                     <p className="text-xs text-[var(--muted)]">Adjust balance based on this transaction</p>
-//                   </div>
-//                   <button
-//                     onClick={() => setTxForm({ ...txForm, updateBalance: !txForm.updateBalance })}
-//                     className={`w-12 h-6 rounded-full relative transition-colors ${txForm.updateBalance ? "bg-blue-500" : "bg-[var(--card-border)]"}`}
-//                   >
-//                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${txForm.updateBalance ? "right-1" : "left-1"}`}></div>
-//                   </button>
-//                 </div>
-
-//                 {/* Preview */}
-//                 {txModalUser && txForm.amount && parseFloat(txForm.amount) > 0 && (
-//                   <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-//                     <p className="text-xs text-blue-400 font-medium mb-1">Preview</p>
-//                     <p className="text-sm">
-//                       <span className="font-medium">{txModalUser.fullName}</span> — {txForm.type} of{" "}
-//                       <span className={`font-bold ${txForm.type === "withdrawal" || txForm.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
-//                         {txForm.type === "withdrawal" || txForm.type === "donation" ? "-" : "+"}${parseFloat(txForm.amount).toLocaleString()} {txForm.currency}
-//                       </span>
-//                     </p>
-//                     {txForm.senderName && <p className="text-xs text-[var(--muted)] mt-1">From: {txForm.senderName}</p>}
-//                     {txForm.receiverName && <p className="text-xs text-[var(--muted)] mt-1">To: {txForm.receiverName}</p>}
-//                     {txForm.transactionDate && <p className="text-xs text-[var(--muted)] mt-1">Date: {new Date(txForm.transactionDate).toLocaleString()}</p>}
-//                     {txForm.updateBalance && txForm.status === "completed" && (
-//                       <p className="text-xs text-[var(--muted)] mt-1">
-//                         New balance: <span className="text-white font-medium">
-//                           ${(txForm.type === "withdrawal" || txForm.type === "donation"
-//                             ? txModalUser.balance - parseFloat(txForm.amount)
-//                             : txModalUser.balance + parseFloat(txForm.amount)
-//                           ).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-//                         </span>
-//                       </p>
-//                     )}
-//                   </div>
-//                 )}
-
-//                 <div className="flex gap-3">
-//                   <button onClick={() => { setShowTxModal(false); setTxModalUser(null); setUserTxHistory([]); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Close</button>
-//                   <button
-//                     onClick={handleAddTransaction}
-//                     disabled={!txModalUser || !txForm.amount || parseFloat(txForm.amount) <= 0}
-//                     className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
-//                   >
-//                     Add Transaction
-//                   </button>
-//                 </div>
-//               </div>
-
-//               {/* Right: User's existing history */}
-//               <div>
-//                 <h4 className="text-sm font-semibold mb-3 text-[var(--muted)]">
-//                   {txModalUser ? `${txModalUser.fullName}'s History (${userTxHistory.length})` : "Select a user to see their history"}
-//                 </h4>
-//                 <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-//                   {userTxHistory.length > 0 ? userTxHistory.map(tx => (
-//                     <div key={tx._id} className="p-3 bg-[var(--background)] border border-[var(--card-border)] rounded-lg">
-//                       <div className="flex items-center justify-between mb-1">
-//                         <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${tx.type === "withdrawal" || tx.type === "donation" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>{tx.type}</span>
-//                         <span className={`text-sm font-bold ${tx.type === "withdrawal" || tx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
-//                           {tx.type === "withdrawal" || tx.type === "donation" ? "-" : "+"}${tx.amount.toLocaleString()} {tx.currency}
-//                         </span>
-//                       </div>
-//                       {tx.senderName && <p className="text-xs text-[var(--muted)]">From: {tx.senderName}</p>}
-//                       {tx.receiverName && <p className="text-xs text-[var(--muted)]">To: {tx.receiverName}</p>}
-//                       {tx.description && <p className="text-xs text-[var(--muted)]">{tx.description}</p>}
-//                       <p className="text-xs text-[var(--muted)] mt-1">{txDisplayDate(tx)}</p>
-//                     </div>
-//                   )) : txModalUser ? (
-//                     <p className="text-xs text-[var(--muted)] py-4 text-center">No history yet. Add the first transaction above.</p>
-//                   ) : null}
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-
-
-
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -1094,11 +96,16 @@ export default function AdminPage() {
   const [txDescription, setTxDescription] = useState("");
 
   // Backdate user modal
-  const [showBackdateModal, setShowBackdateModal] = useState(false);
+  const [showBackdateUserModal, setShowBackdateUserModal] = useState(false);
   const [backdateUser, setBackdateUser] = useState<User | null>(null);
-  const [backdateValue, setBackdateValue] = useState("");
+  const [backdateUserValue, setBackdateUserValue] = useState("");
 
-  // Transaction History modal
+  // Backdate transaction modal
+  const [showBackdateTxModal, setShowBackdateTxModal] = useState(false);
+  const [backdateTx, setBackdateTx] = useState<Transaction | null>(null);
+  const [backdateTxValue, setBackdateTxValue] = useState("");
+
+  // Add Transaction History modal
   const [showTxModal, setShowTxModal] = useState(false);
   const [txModalUser, setTxModalUser] = useState<User | null>(null);
   const [txForm, setTxForm] = useState({ ...defaultTxForm });
@@ -1190,7 +197,7 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  // Poll transactions every 10s so pending transfers appear quickly
+  // Poll every 10s so pending transfers appear quickly
   useEffect(() => {
     const iv = setInterval(() => {
       fetchTransactions();
@@ -1269,11 +276,41 @@ export default function AdminPage() {
   };
 
   const handleBackdateUser = async () => {
-    if (!backdateUser || !backdateValue) return;
-    await updateUser(backdateUser._id, { createdAt: new Date(backdateValue).toISOString() });
-    setShowBackdateModal(false);
+    if (!backdateUser || !backdateUserValue) return;
+    await updateUser(backdateUser._id, { createdAt: new Date(backdateUserValue).toISOString() });
+    setShowBackdateUserModal(false);
     setBackdateUser(null);
-    setBackdateValue("");
+    setBackdateUserValue("");
+  };
+
+  const handleBackdateTransaction = async () => {
+    if (!backdateTx || !backdateTxValue) return;
+    try {
+      const res = await fetch("/api/transactions/backdate", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionId: backdateTx._id,
+          transactionDate: new Date(backdateTxValue).toISOString(),
+        }),
+      });
+      if (res.ok) {
+        showToast("Transaction date updated successfully", "success");
+        await fetchTransactions();
+        if (viewingUserHistory) {
+          const uid = typeof backdateTx.userId === "object" ? backdateTx.userId._id : backdateTx.userId;
+          await fetchUserHistory(uid);
+        }
+      } else {
+        const d = await res.json();
+        showToast(d.error || "Failed to update transaction date", "error");
+      }
+    } catch {
+      showToast("Server error", "error");
+    }
+    setShowBackdateTxModal(false);
+    setBackdateTx(null);
+    setBackdateTxValue("");
   };
 
   const openTxModal = (user: User) => {
@@ -1460,10 +497,7 @@ export default function AdminPage() {
             {navItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  setSidebarOpen(false);
-                }}
+                onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm transition-colors ${
                   activeTab === item.id
                     ? "bg-blue-500/10 text-blue-400"
@@ -1494,12 +528,7 @@ export default function AdminPage() {
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
             Sign Out
           </button>
@@ -1548,9 +577,7 @@ export default function AdminPage() {
             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Recent Users</h2>
-                <button onClick={() => setActiveTab("users")} className="text-blue-400 text-sm hover:underline">
-                  View All →
-                </button>
+                <button onClick={() => setActiveTab("users")} className="text-blue-400 text-sm hover:underline">View All →</button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1568,42 +595,25 @@ export default function AdminPage() {
                       <tr key={u._id} className="border-b border-[var(--card-border)] last:border-0">
                         <td className="py-3 font-medium">{u.fullName}</td>
                         <td className="py-3 text-[var(--muted)]">{u.email}</td>
-                        <td className="py-3 font-medium">
-                          ${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                        </td>
+                        <td className="py-3 font-medium">${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                         <td className="py-3">
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full ${
-                              u.isVerified
-                                ? "bg-emerald-500/10 text-emerald-400"
-                                : "bg-amber-500/10 text-amber-400"
-                            }`}
-                          >
+                          <span className={`text-xs px-2 py-1 rounded-full ${u.isVerified ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
                             {u.isVerified ? "Verified" : "Pending"}
                           </span>
                         </td>
-                        <td className="py-3 text-[var(--muted)]">
-                          {new Date(u.createdAt).toLocaleDateString()}
-                        </td>
+                        <td className="py-3 text-[var(--muted)]">{new Date(u.createdAt).toLocaleDateString()}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {users.length === 0 && (
-                  <p className="text-center py-8 text-[var(--muted)]">No users yet</p>
-                )}
+                {users.length === 0 && <p className="text-center py-8 text-[var(--muted)]">No users yet</p>}
               </div>
             </div>
 
             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Recent Transactions</h2>
-                <button
-                  onClick={() => setActiveTab("transactions")}
-                  className="text-blue-400 text-sm hover:underline"
-                >
-                  View All →
-                </button>
+                <button onClick={() => setActiveTab("transactions")} className="text-blue-400 text-sm hover:underline">View All →</button>
               </div>
               {transactions.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -1621,37 +631,14 @@ export default function AdminPage() {
                     <tbody>
                       {transactions.slice(0, 5).map((tx) => (
                         <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0">
-                          <td className="py-3">
-                            {typeof tx.userId === "object" ? tx.userId.fullName : "—"}
-                          </td>
+                          <td className="py-3">{typeof tx.userId === "object" ? tx.userId.fullName : "—"}</td>
                           <td className="py-3 capitalize">{tx.type}</td>
-                          <td
-                            className={`py-3 font-medium ${
-                              tx.type === "withdrawal" || tx.type === "transfer" || tx.type === "donation"
-                                ? "text-red-400"
-                                : "text-emerald-400"
-                            }`}
-                          >
-                            {tx.type === "withdrawal" || tx.type === "transfer" || tx.type === "donation"
-                              ? "-"
-                              : "+"}
-                            ${tx.amount.toLocaleString()}
+                          <td className={`py-3 font-medium ${tx.type === "withdrawal" || tx.type === "transfer" || tx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                            {tx.type === "withdrawal" || tx.type === "transfer" || tx.type === "donation" ? "-" : "+"}${tx.amount.toLocaleString()}
                           </td>
-                          <td className="py-3 text-[var(--muted)] text-xs">
-                            {tx.recipientFullName || tx.senderName || tx.receiverName || "—"}
-                          </td>
+                          <td className="py-3 text-[var(--muted)] text-xs">{tx.recipientFullName || tx.senderName || tx.receiverName || "—"}</td>
                           <td className="py-3">
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                tx.status === "completed"
-                                  ? "bg-emerald-500/10 text-emerald-400"
-                                  : tx.status === "processing"
-                                  ? "bg-blue-500/10 text-blue-400"
-                                  : tx.status === "pending"
-                                  ? "bg-amber-500/10 text-amber-400"
-                                  : "bg-red-500/10 text-red-400"
-                              }`}
-                            >
+                            <span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "processing" ? "bg-blue-500/10 text-blue-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>
                               {tx.status}
                             </span>
                           </td>
@@ -1675,25 +662,13 @@ export default function AdminPage() {
               <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-lg font-semibold">
-                      Transaction History — {viewingUserHistory.fullName}
-                    </h2>
+                    <h2 className="text-lg font-semibold">Transaction History — {viewingUserHistory.fullName}</h2>
                     <p className="text-xs text-[var(--muted)]">
                       {viewingUserHistory.email} · Current balance:{" "}
-                      <span className="text-white font-medium">
-                        ${viewingUserHistory.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </span>
+                      <span className="text-white font-medium">${viewingUserHistory.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setViewingUserHistory(null);
-                      setUserTxHistory([]);
-                    }}
-                    className="text-[var(--muted)] hover:text-white text-sm"
-                  >
-                    Close ×
-                  </button>
+                  <button onClick={() => { setViewingUserHistory(null); setUserTxHistory([]); }} className="text-[var(--muted)] hover:text-white text-sm">Close ×</button>
                 </div>
                 {userTxHistory.length > 0 ? (
                   <div className="overflow-x-auto">
@@ -1706,64 +681,49 @@ export default function AdminPage() {
                           <th className="pb-3 font-medium">Description</th>
                           <th className="pb-3 font-medium">Status</th>
                           <th className="pb-3 font-medium">Date</th>
+                          <th className="pb-3 font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {userTxHistory.map((tx) => (
                           <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0">
                             <td className="py-3 capitalize font-medium">{tx.type}</td>
-                            <td
-                              className={`py-3 font-bold ${
-                                tx.type === "withdrawal" || tx.type === "donation" || tx.type === "transfer"
-                                  ? "text-red-400"
-                                  : "text-emerald-400"
-                              }`}
-                            >
-                              {tx.type === "withdrawal" || tx.type === "donation" || tx.type === "transfer"
-                                ? "-"
-                                : "+"}
+                            <td className={`py-3 font-bold ${tx.type === "withdrawal" || tx.type === "donation" || tx.type === "transfer" ? "text-red-400" : "text-emerald-400"}`}>
+                              {tx.type === "withdrawal" || tx.type === "donation" || tx.type === "transfer" ? "-" : "+"}
                               ${tx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {tx.currency}
                             </td>
                             <td className="py-3 text-[var(--muted)]">
-                              {tx.senderName && (
-                                <span className="block text-xs">From: {tx.senderName}</span>
-                              )}
-                              {tx.receiverName && (
-                                <span className="block text-xs">To: {tx.receiverName}</span>
-                              )}
-                              {tx.recipientFullName && (
-                                <span className="block text-xs">To: {tx.recipientFullName}</span>
-                              )}
+                              {tx.senderName && <span className="block text-xs">From: {tx.senderName}</span>}
+                              {tx.receiverName && <span className="block text-xs">To: {tx.receiverName}</span>}
+                              {tx.recipientFullName && <span className="block text-xs">To: {tx.recipientFullName}</span>}
                               {!tx.senderName && !tx.receiverName && !tx.recipientFullName && "—"}
                             </td>
-                            <td className="py-3 text-[var(--muted)] text-xs">
-                              {tx.referenceMemo || tx.description || "—"}
-                            </td>
+                            <td className="py-3 text-[var(--muted)] text-xs">{tx.referenceMemo || tx.description || "—"}</td>
                             <td className="py-3">
-                              <span
-                                className={`text-xs px-2 py-1 rounded-full ${
-                                  tx.status === "completed"
-                                    ? "bg-emerald-500/10 text-emerald-400"
-                                    : tx.status === "processing"
-                                    ? "bg-blue-500/10 text-blue-400"
-                                    : tx.status === "pending"
-                                    ? "bg-amber-500/10 text-amber-400"
-                                    : "bg-red-500/10 text-red-400"
-                                }`}
-                              >
+                              <span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "processing" ? "bg-blue-500/10 text-blue-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>
                                 {tx.status}
                               </span>
                             </td>
                             <td className="py-3 text-[var(--muted)] text-xs">{txDisplayDate(tx)}</td>
+                            <td className="py-3">
+                              <button
+                                onClick={() => {
+                                  setBackdateTx(tx);
+                                  setBackdateTxValue(new Date(tx.transactionDate || tx.createdAt).toISOString().slice(0, 16));
+                                  setShowBackdateTxModal(true);
+                                }}
+                                className="text-xs bg-orange-500/10 text-orange-400 px-2 py-1 rounded-lg hover:bg-orange-500/20 whitespace-nowrap"
+                              >
+                                Backdate
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="text-center py-6 text-[var(--muted)] text-sm">
-                    No transaction history for this user yet.
-                  </p>
+                  <p className="text-center py-6 text-[var(--muted)] text-sm">No transaction history for this user yet.</p>
                 )}
               </div>
             )}
@@ -1790,88 +750,37 @@ export default function AdminPage() {
                           <p className="text-xs text-[var(--muted)]">{u.phone}</p>
                         </td>
                         <td className="py-3 text-[var(--muted)]">{u.email}</td>
-                        <td className="py-3 font-medium">
-                          ${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                        </td>
+                        <td className="py-3 font-medium">${u.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                         <td className="py-3">
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full ${
-                              u.isVerified
-                                ? "bg-emerald-500/10 text-emerald-400"
-                                : "bg-amber-500/10 text-amber-400"
-                            }`}
-                          >
+                          <span className={`text-xs px-2 py-1 rounded-full ${u.isVerified ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
                             {u.isVerified ? "Verified" : "Pending"}
                           </span>
                         </td>
-                        <td className="py-3 text-[var(--muted)] text-xs">
-                          {new Date(u.createdAt).toLocaleDateString()}
-                        </td>
+                        <td className="py-3 text-[var(--muted)] text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
                         <td className="py-3">
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => {
-                                setSelectedUser(u);
-                                setShowBalanceModal(true);
-                                setEditBalance("");
-                                setTxDescription("");
-                              }}
-                              className="text-xs bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg hover:bg-blue-500/20"
-                            >
-                              Update Balance
-                            </button>
-                            <button
-                              onClick={() => openTxModal(u)}
-                              className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-lg hover:bg-emerald-500/20"
-                            >
-                              + Add History
-                            </button>
-                            <button
-                              onClick={() => openUserHistory(u)}
-                              className="text-xs bg-purple-500/10 text-purple-400 px-3 py-1 rounded-lg hover:bg-purple-500/20"
-                            >
-                              View History
-                            </button>
-                            <button
-                              onClick={() => updateUser(u._id, { isVerified: !u.isVerified })}
-                              className={`text-xs px-3 py-1 rounded-lg ${
-                                u.isVerified
-                                  ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                                  : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                              }`}
-                            >
+                            <button onClick={() => { setSelectedUser(u); setShowBalanceModal(true); setEditBalance(""); setTxDescription(""); }} className="text-xs bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg hover:bg-blue-500/20">Update Balance</button>
+                            <button onClick={() => openTxModal(u)} className="text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-lg hover:bg-emerald-500/20">+ Add History</button>
+                            <button onClick={() => openUserHistory(u)} className="text-xs bg-purple-500/10 text-purple-400 px-3 py-1 rounded-lg hover:bg-purple-500/20">View History</button>
+                            <button onClick={() => updateUser(u._id, { isVerified: !u.isVerified })} className={`text-xs px-3 py-1 rounded-lg ${u.isVerified ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`}>
                               {u.isVerified ? "Unverify" : "Verify"}
                             </button>
                             <button
                               onClick={() => {
                                 setBackdateUser(u);
-                                setBackdateValue(
-                                  new Date(u.createdAt).toISOString().slice(0, 16)
-                                );
-                                setShowBackdateModal(true);
+                                setBackdateUserValue(new Date(u.createdAt).toISOString().slice(0, 16));
+                                setShowBackdateUserModal(true);
                               }}
                               className="text-xs bg-orange-500/10 text-orange-400 px-3 py-1 rounded-lg hover:bg-orange-500/20"
                             >
                               Backdate
                             </button>
                             {u.role !== "admin" && (
-                              <button
-                                onClick={() => updateUser(u._id, { role: "admin" })}
-                                className="text-xs bg-pink-500/10 text-pink-400 px-3 py-1 rounded-lg hover:bg-pink-500/20"
-                              >
-                                Make Admin
-                              </button>
+                              <button onClick={() => updateUser(u._id, { role: "admin" })} className="text-xs bg-pink-500/10 text-pink-400 px-3 py-1 rounded-lg hover:bg-pink-500/20">Make Admin</button>
                             )}
                             <button
                               onClick={() => {
-                                setChatUser({
-                                  _id: u._id,
-                                  lastMessage: "",
-                                  lastDate: "",
-                                  senderName: u.fullName,
-                                  unreadCount: 0,
-                                  user: { fullName: u.fullName, email: u.email },
-                                });
+                                setChatUser({ _id: u._id, lastMessage: "", lastDate: "", senderName: u.fullName, unreadCount: 0, user: { fullName: u.fullName, email: u.email } });
                                 setActiveTab("messages");
                               }}
                               className="text-xs bg-cyan-500/10 text-cyan-400 px-3 py-1 rounded-lg hover:bg-cyan-500/20"
@@ -1885,9 +794,7 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-              {users.length === 0 && (
-                <p className="text-center py-8 text-[var(--muted)]">No users yet</p>
-              )}
+              {users.length === 0 && <p className="text-center py-8 text-[var(--muted)]">No users yet</p>}
             </div>
           </div>
         )}
@@ -1900,12 +807,7 @@ export default function AdminPage() {
               <div>
                 <h3 className="text-lg font-semibold mb-4 text-amber-400 flex items-center gap-2">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Pending Approvals ({pendingCount})
                 </h3>
@@ -1913,86 +815,36 @@ export default function AdminPage() {
                   {transactions
                     .filter((tx) => tx.status === "pending" || tx.status === "processing")
                     .map((tx) => (
-                      <div
-                        key={tx._id}
-                        className="bg-amber-500/5 border border-amber-500/30 rounded-xl p-5 hover:bg-amber-500/10 transition-all"
-                      >
+                      <div key={tx._id} className="bg-amber-500/5 border border-amber-500/30 rounded-xl p-5 hover:bg-amber-500/10 transition-all">
                         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <span
-                                className={`text-xs px-2 py-1 rounded-full ${
-                                  tx.status === "processing"
-                                    ? "bg-blue-500/10 text-blue-400"
-                                    : "bg-amber-500/10 text-amber-400"
-                                }`}
-                              >
+                              <span className={`text-xs px-2 py-1 rounded-full ${tx.status === "processing" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"}`}>
                                 {tx.status === "processing" ? "Processing" : "Pending"}
                               </span>
-                              <span className="text-xs text-[var(--muted)]">
-                                {new Date(tx.createdAt).toLocaleString()}
-                              </span>
+                              <span className="text-xs text-[var(--muted)]">{new Date(tx.createdAt).toLocaleString()}</span>
                             </div>
                             <p className="text-sm font-medium mb-1">
                               {typeof tx.userId === "object" ? tx.userId.fullName : "User"} •{" "}
-                              <span
-                                className={
-                                  tx.type === "transfer" || tx.type === "withdrawal"
-                                    ? "text-red-400"
-                                    : "text-emerald-400"
-                                }
-                              >
-                                {tx.type === "transfer" || tx.type === "withdrawal" ? "-" : "+"}$
-                                {tx.amount.toLocaleString()} {tx.currency}
+                              <span className={tx.type === "transfer" || tx.type === "withdrawal" ? "text-red-400" : "text-emerald-400"}>
+                                {tx.type === "transfer" || tx.type === "withdrawal" ? "-" : "+"}${tx.amount.toLocaleString()} {tx.currency}
                               </span>
                             </p>
-                            <p className="text-xs text-[var(--muted)] capitalize mb-1">
-                              Type: {tx.type}
-                            </p>
+                            <p className="text-xs text-[var(--muted)] capitalize mb-1">Type: {tx.type}</p>
                             {tx.type === "transfer" && (
                               <div className="mt-3 p-3 bg-[var(--background)] rounded-lg space-y-1.5 text-xs">
-                                <p>
-                                  <span className="text-[var(--muted)]">Recipient:</span>{" "}
-                                  {tx.recipientFullName}
-                                </p>
-                                <p>
-                                  <span className="text-[var(--muted)]">Bank:</span>{" "}
-                                  {tx.recipientBankName}
-                                </p>
-                                <p>
-                                  <span className="text-[var(--muted)]">Bank Address:</span>{" "}
-                                  {tx.bankAddress}
-                                </p>
-                                <p>
-                                  <span className="text-[var(--muted)]">Account:</span>{" "}
-                                  {tx.accountNumber}
-                                </p>
-                                <p>
-                                  <span className="text-[var(--muted)]">Routing:</span>{" "}
-                                  {tx.routingNumber}
-                                </p>
-                                <p>
-                                  <span className="text-[var(--muted)]">Account Type:</span>{" "}
-                                  {tx.accountType}
-                                </p>
-                                {tx.recipientAddress && (
-                                  <p>
-                                    <span className="text-[var(--muted)]">Recipient Address:</span>{" "}
-                                    {tx.recipientAddress}
-                                  </p>
-                                )}
-                                {tx.referenceMemo && (
-                                  <p>
-                                    <span className="text-[var(--muted)]">Memo:</span>{" "}
-                                    {tx.referenceMemo}
-                                  </p>
-                                )}
+                                <p><span className="text-[var(--muted)]">Recipient:</span> {tx.recipientFullName}</p>
+                                <p><span className="text-[var(--muted)]">Bank:</span> {tx.recipientBankName}</p>
+                                <p><span className="text-[var(--muted)]">Bank Address:</span> {tx.bankAddress}</p>
+                                <p><span className="text-[var(--muted)]">Account:</span> {tx.accountNumber}</p>
+                                <p><span className="text-[var(--muted)]">Routing:</span> {tx.routingNumber}</p>
+                                <p><span className="text-[var(--muted)]">Account Type:</span> {tx.accountType}</p>
+                                {tx.recipientAddress && <p><span className="text-[var(--muted)]">Recipient Address:</span> {tx.recipientAddress}</p>}
+                                {tx.referenceMemo && <p><span className="text-[var(--muted)]">Memo:</span> {tx.referenceMemo}</p>}
                               </div>
                             )}
                             {(tx.type === "deposit" || tx.type === "withdrawal") && tx.description && (
-                              <p className="text-xs text-[var(--muted)] mt-1">
-                                Note: {tx.description}
-                              </p>
+                              <p className="text-xs text-[var(--muted)] mt-1">Note: {tx.description}</p>
                             )}
                           </div>
                           <div className="flex gap-2 md:flex-col lg:flex-row shrink-0">
@@ -2001,12 +853,7 @@ export default function AdminPage() {
                               className="bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-500/20 hover:scale-105 transition-all flex items-center gap-2"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 13l4 4L19 7"
-                                />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                               </svg>
                               Approve
                             </button>
@@ -2015,12 +862,7 @@ export default function AdminPage() {
                               className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-500/20 hover:scale-105 transition-all flex items-center gap-2"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                               Reject
                             </button>
@@ -2034,9 +876,7 @@ export default function AdminPage() {
 
             {/* All Transactions Table */}
             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-6">
-              <h2 className="text-lg font-semibold mb-4">
-                All Transactions ({transactions.length})
-              </h2>
+              <h2 className="text-lg font-semibold mb-4">All Transactions ({transactions.length})</h2>
               {transactions.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -2046,17 +886,15 @@ export default function AdminPage() {
                         <th className="pb-3 font-medium">Type</th>
                         <th className="pb-3 font-medium">Amount</th>
                         <th className="pb-3 font-medium">Recipient / Sender</th>
-                        <th className="pb-3 font-medium">Memo / Description</th>
+                        <th className="pb-3 font-medium">Memo / Desc</th>
                         <th className="pb-3 font-medium">Status</th>
                         <th className="pb-3 font-medium">Date</th>
+                        <th className="pb-3 font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {transactions.map((tx) => (
-                        <tr
-                          key={tx._id}
-                          className="border-b border-[var(--card-border)] last:border-0 hover:bg-[var(--background)] transition-colors"
-                        >
+                        <tr key={tx._id} className="border-b border-[var(--card-border)] last:border-0 hover:bg-[var(--background)] transition-colors">
                           <td className="py-3 text-sm">
                             {typeof tx.userId === "object" ? tx.userId.fullName : "—"}
                             {typeof tx.userId === "object" && (
@@ -2064,55 +902,40 @@ export default function AdminPage() {
                             )}
                           </td>
                           <td className="py-3 capitalize">{tx.type}</td>
-                          <td
-                            className={`py-3 font-medium ${
-                              tx.type === "withdrawal" ||
-                              tx.type === "transfer" ||
-                              tx.type === "donation"
-                                ? "text-red-400"
-                                : "text-emerald-400"
-                            }`}
-                          >
-                            {tx.type === "withdrawal" ||
-                            tx.type === "transfer" ||
-                            tx.type === "donation"
-                              ? "-"
-                              : "+"}
+                          <td className={`py-3 font-medium ${tx.type === "withdrawal" || tx.type === "transfer" || tx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                            {tx.type === "withdrawal" || tx.type === "transfer" || tx.type === "donation" ? "-" : "+"}
                             ${tx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
                             <span className="text-xs text-[var(--muted)]">{tx.currency}</span>
                           </td>
                           <td className="py-3 text-[var(--muted)] text-xs">
-                            {tx.recipientFullName
-                              ? `To: ${tx.recipientFullName}`
-                              : tx.senderName
-                              ? `From: ${tx.senderName}`
-                              : tx.receiverName
-                              ? `To: ${tx.receiverName}`
-                              : "—"}
-                            {tx.recipientBankName && (
-                              <span className="block text-[var(--muted)]">{tx.recipientBankName}</span>
-                            )}
+                            {tx.recipientFullName ? `To: ${tx.recipientFullName}` : tx.senderName ? `From: ${tx.senderName}` : tx.receiverName ? `To: ${tx.receiverName}` : "—"}
+                            {tx.recipientBankName && <span className="block">{tx.recipientBankName}</span>}
                           </td>
-                          <td className="py-3 text-[var(--muted)] text-xs max-w-[160px] truncate">
+                          <td className="py-3 text-[var(--muted)] text-xs max-w-[140px] truncate">
                             {tx.referenceMemo || tx.description || "—"}
                           </td>
                           <td className="py-3">
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                tx.status === "completed"
-                                  ? "bg-emerald-500/10 text-emerald-400"
-                                  : tx.status === "processing"
-                                  ? "bg-blue-500/10 text-blue-400"
-                                  : tx.status === "pending"
-                                  ? "bg-amber-500/10 text-amber-400"
-                                  : "bg-red-500/10 text-red-400"
-                              }`}
-                            >
+                            <span className={`text-xs px-2 py-1 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "processing" ? "bg-blue-500/10 text-blue-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>
                               {tx.status}
                             </span>
                           </td>
                           <td className="py-3 text-[var(--muted)] text-xs whitespace-nowrap">
                             {txDisplayDate(tx)}
+                          </td>
+                          <td className="py-3">
+                            <button
+                              onClick={() => {
+                                setBackdateTx(tx);
+                                setBackdateTxValue(new Date(tx.transactionDate || tx.createdAt).toISOString().slice(0, 16));
+                                setShowBackdateTxModal(true);
+                              }}
+                              className="text-xs bg-orange-500/10 text-orange-400 px-3 py-1 rounded-lg hover:bg-orange-500/20 whitespace-nowrap flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              Backdate
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -2128,10 +951,7 @@ export default function AdminPage() {
 
         {/* ── MESSAGES TAB ── */}
         {activeTab === "messages" && (
-          <div
-            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-            style={{ height: "calc(100vh - 140px)" }}
-          >
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ height: "calc(100vh - 140px)" }}>
             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl overflow-hidden flex flex-col">
               <div className="p-4 border-b border-[var(--card-border)]">
                 <h2 className="text-sm font-semibold">Conversations</h2>
@@ -2142,70 +962,39 @@ export default function AdminPage() {
                     key={conv._id.toString()}
                     onClick={() => {
                       setChatUser(conv);
-                      fetch("/api/messages", {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ userId: conv._id }),
-                      });
+                      fetch("/api/messages", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: conv._id }) });
                     }}
-                    className={`w-full text-left p-4 border-b border-[var(--card-border)] hover:bg-[var(--background)] transition-colors ${
-                      chatUser?._id === conv._id.toString() ? "bg-[var(--background)]" : ""
-                    }`}
+                    className={`w-full text-left p-4 border-b border-[var(--card-border)] hover:bg-[var(--background)] transition-colors ${chatUser?._id === conv._id.toString() ? "bg-[var(--background)]" : ""}`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">
-                        {conv.user?.fullName || conv.senderName}
-                      </span>
+                      <span className="text-sm font-medium">{conv.user?.fullName || conv.senderName}</span>
                       {conv.unreadCount > 0 && (
-                        <span className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {conv.unreadCount}
-                        </span>
+                        <span className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{conv.unreadCount}</span>
                       )}
                     </div>
                     <p className="text-xs text-[var(--muted)] truncate">{conv.lastMessage}</p>
                   </button>
                 ))}
-                {users.filter(
-                  (u) =>
-                    u.role !== "admin" && !conversations.find((c) => c._id.toString() === u._id)
-                ).length > 0 && (
+                {users.filter((u) => u.role !== "admin" && !conversations.find((c) => c._id.toString() === u._id)).length > 0 && (
                   <>
                     <div className="p-3 border-b border-[var(--card-border)]">
                       <p className="text-xs text-[var(--muted)] font-medium">All Users</p>
                     </div>
-                    {users
-                      .filter(
-                        (u) =>
-                          u.role !== "admin" &&
-                          !conversations.find((c) => c._id.toString() === u._id)
-                      )
-                      .map((u) => (
-                        <button
-                          key={u._id}
-                          onClick={() =>
-                            setChatUser({
-                              _id: u._id,
-                              lastMessage: "",
-                              lastDate: "",
-                              senderName: u.fullName,
-                              unreadCount: 0,
-                              user: { fullName: u.fullName, email: u.email },
-                            })
-                          }
-                          className={`w-full text-left p-4 border-b border-[var(--card-border)] hover:bg-[var(--background)] transition-colors ${
-                            chatUser?._id === u._id ? "bg-[var(--background)]" : ""
-                          }`}
-                        >
-                          <span className="text-sm font-medium">{u.fullName}</span>
-                          <p className="text-xs text-[var(--muted)]">{u.email}</p>
-                        </button>
-                      ))}
+                    {users.filter((u) => u.role !== "admin" && !conversations.find((c) => c._id.toString() === u._id)).map((u) => (
+                      <button
+                        key={u._id}
+                        onClick={() => setChatUser({ _id: u._id, lastMessage: "", lastDate: "", senderName: u.fullName, unreadCount: 0, user: { fullName: u.fullName, email: u.email } })}
+                        className={`w-full text-left p-4 border-b border-[var(--card-border)] hover:bg-[var(--background)] transition-colors ${chatUser?._id === u._id ? "bg-[var(--background)]" : ""}`}
+                      >
+                        <span className="text-sm font-medium">{u.fullName}</span>
+                        <p className="text-xs text-[var(--muted)]">{u.email}</p>
+                      </button>
+                    ))}
                   </>
                 )}
-                {conversations.length === 0 &&
-                  users.filter((u) => u.role !== "admin").length === 0 && (
-                    <p className="text-center py-8 text-[var(--muted)] text-sm">No users yet</p>
-                  )}
+                {conversations.length === 0 && users.filter((u) => u.role !== "admin").length === 0 && (
+                  <p className="text-center py-8 text-[var(--muted)] text-sm">No users yet</p>
+                )}
               </div>
             </div>
 
@@ -2214,90 +1003,39 @@ export default function AdminPage() {
                 <>
                   <div className="p-4 border-b border-[var(--card-border)] flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">
-                        {(chatUser.user?.fullName || chatUser.senderName)
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </span>
+                      <span className="text-white text-sm font-medium">{(chatUser.user?.fullName || chatUser.senderName).split(" ").map((n) => n[0]).join("")}</span>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">
-                        {chatUser.user?.fullName || chatUser.senderName}
-                      </p>
+                      <p className="text-sm font-semibold">{chatUser.user?.fullName || chatUser.senderName}</p>
                       <p className="text-xs text-[var(--muted)]">{chatUser.user?.email || ""}</p>
                     </div>
                   </div>
-                  <div
-                    className="flex-1 overflow-y-auto p-4 space-y-3"
-                    style={{ maxHeight: "calc(100vh - 340px)" }}
-                  >
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: "calc(100vh - 340px)" }}>
                     {chatMessages.map((msg) => (
-                      <div
-                        key={msg._id}
-                        className={`flex ${msg.senderRole === "admin" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${
-                            msg.senderRole === "admin"
-                              ? "bg-blue-500 text-white rounded-br-md"
-                              : "bg-[var(--background)] border border-[var(--card-border)] rounded-bl-md"
-                          }`}
-                        >
+                      <div key={msg._id} className={`flex ${msg.senderRole === "admin" ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${msg.senderRole === "admin" ? "bg-blue-500 text-white rounded-br-md" : "bg-[var(--background)] border border-[var(--card-border)] rounded-bl-md"}`}>
                           <p>{msg.content}</p>
-                          <p
-                            className={`text-xs mt-1 ${
-                              msg.senderRole === "admin" ? "text-blue-200" : "text-[var(--muted)]"
-                            }`}
-                          >
-                            {new Date(msg.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                          <p className={`text-xs mt-1 ${msg.senderRole === "admin" ? "text-blue-200" : "text-[var(--muted)]"}`}>
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
                       </div>
                     ))}
-                    {chatMessages.length === 0 && (
-                      <p className="text-center text-[var(--muted)] text-sm py-8">
-                        No messages yet. Start the conversation.
-                      </p>
-                    )}
+                    {chatMessages.length === 0 && <p className="text-center text-[var(--muted)] text-sm py-8">No messages yet. Start the conversation.</p>}
                   </div>
                   <div className="border-t border-[var(--card-border)] p-4">
                     <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && sendAdminMessage()}
-                        placeholder="Type a message..."
-                        className="flex-1 bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-                      />
-                      <button
-                        onClick={sendAdminMessage}
-                        className="btn-primary text-white px-6 py-2.5 rounded-lg text-sm font-medium"
-                      >
-                        Send
-                      </button>
+                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendAdminMessage()} placeholder="Type a message..."
+                        className="flex-1 bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500" />
+                      <button onClick={sendAdminMessage} className="btn-primary text-white px-6 py-2.5 rounded-lg text-sm font-medium">Send</button>
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-[var(--muted)]">
                   <div className="text-center">
-                    <svg
-                      className="w-16 h-16 mx-auto mb-4 opacity-30"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                      />
+                    <svg className="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
                     <p>Select a conversation to start messaging</p>
                   </div>
@@ -2314,108 +1052,52 @@ export default function AdminPage() {
           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold">Update Balance</h3>
-              <button
-                onClick={() => {
-                  setShowBalanceModal(false);
-                  setSelectedUser(null);
-                }}
-                className="text-[var(--muted)] hover:text-white"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+              <button onClick={() => { setShowBalanceModal(false); setSelectedUser(null); }} className="text-[var(--muted)] hover:text-white">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <div className="mb-4 p-3 bg-[var(--background)] rounded-lg">
               <p className="text-sm font-medium">{selectedUser.fullName}</p>
               <p className="text-xs text-[var(--muted)]">{selectedUser.email}</p>
-              <p className="text-lg font-bold gradient-text mt-1">
-                Current: ${selectedUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-              </p>
+              <p className="text-lg font-bold gradient-text mt-1">Current: ${selectedUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Action</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(["deposit", "withdraw", "set"] as const).map((a) => (
-                    <button
-                      key={a}
-                      onClick={() => setBalanceAction(a)}
-                      className={`py-2 rounded-lg text-sm font-medium capitalize ${
-                        balanceAction === a
-                          ? "bg-blue-500 text-white"
-                          : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"
-                      }`}
-                    >
+                    <button key={a} onClick={() => setBalanceAction(a)}
+                      className={`py-2 rounded-lg text-sm font-medium capitalize ${balanceAction === a ? "bg-blue-500 text-white" : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"}`}>
                       {a}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">
-                  {balanceAction === "set" ? "New Balance" : "Amount"} (USD)
-                </label>
-                <input
-                  type="number"
-                  value={editBalance}
-                  onChange={(e) => setEditBalance(e.target.value)}
+                <label className="block text-sm font-medium mb-1.5">{balanceAction === "set" ? "New Balance" : "Amount"} (USD)</label>
+                <input type="number" value={editBalance} onChange={(e) => setEditBalance(e.target.value)}
                   className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-                  placeholder="0.00"
-                  step="0.01"
-                  min="0"
-                />
+                  placeholder="0.00" step="0.01" min="0" />
               </div>
               {balanceAction !== "set" && (
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Description</label>
-                  <input
-                    type="text"
-                    value={txDescription}
-                    onChange={(e) => setTxDescription(e.target.value)}
+                  <input type="text" value={txDescription} onChange={(e) => setTxDescription(e.target.value)}
                     className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-                    placeholder={`e.g. ${
-                      balanceAction === "deposit" ? "Wire transfer received" : "Withdrawal processed"
-                    }`}
-                  />
+                    placeholder={`e.g. ${balanceAction === "deposit" ? "Wire transfer received" : "Withdrawal processed"}`} />
                 </div>
               )}
               {editBalance && (
                 <div className="p-3 bg-[var(--background)] rounded-lg">
                   <p className="text-xs text-[var(--muted)]">New balance will be:</p>
                   <p className="text-lg font-bold gradient-text">
-                    $
-                    {(balanceAction === "set"
-                      ? parseFloat(editBalance)
-                      : balanceAction === "deposit"
-                      ? selectedUser.balance + parseFloat(editBalance)
-                      : selectedUser.balance - parseFloat(editBalance)
-                    ).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    ${(balanceAction === "set" ? parseFloat(editBalance) : balanceAction === "deposit" ? selectedUser.balance + parseFloat(editBalance) : selectedUser.balance - parseFloat(editBalance)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </p>
                 </div>
               )}
               <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowBalanceModal(false);
-                    setSelectedUser(null);
-                  }}
-                  className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBalanceUpdate}
-                  disabled={!editBalance || parseFloat(editBalance) <= 0}
-                  className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
-                >
-                  Confirm
-                </button>
+                <button onClick={() => { setShowBalanceModal(false); setSelectedUser(null); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Cancel</button>
+                <button onClick={handleBalanceUpdate} disabled={!editBalance || parseFloat(editBalance) <= 0} className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50">Confirm</button>
               </div>
             </div>
           </div>
@@ -2423,73 +1105,100 @@ export default function AdminPage() {
       )}
 
       {/* ── BACKDATE USER MODAL ── */}
-      {showBackdateModal && backdateUser && (
+      {showBackdateUserModal && backdateUser && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold">Backdate Account Creation</h3>
-              <button
-                onClick={() => {
-                  setShowBackdateModal(false);
-                  setBackdateUser(null);
-                }}
-                className="text-[var(--muted)] hover:text-white"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+              <button onClick={() => { setShowBackdateUserModal(false); setBackdateUser(null); }} className="text-[var(--muted)] hover:text-white">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <div className="mb-4 p-3 bg-[var(--background)] rounded-lg">
               <p className="text-sm font-medium">{backdateUser.fullName}</p>
               <p className="text-xs text-[var(--muted)]">{backdateUser.email}</p>
-              <p className="text-xs text-[var(--muted)] mt-1">
-                Current join date:{" "}
-                <span className="text-white">{new Date(backdateUser.createdAt).toLocaleString()}</span>
-              </p>
+              <p className="text-xs text-[var(--muted)] mt-1">Current join date: <span className="text-white">{new Date(backdateUser.createdAt).toLocaleString()}</span></p>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1.5">
-                  New Account Creation Date & Time
-                </label>
+                <label className="block text-sm font-medium mb-1.5">New Account Creation Date & Time</label>
+                <input type="datetime-local" value={backdateUserValue} onChange={(e) => setBackdateUserValue(e.target.value)}
+                  className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500" />
+              </div>
+              {backdateUserValue && (
+                <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                  <p className="text-xs text-orange-400">Account will show as created on: <span className="font-medium text-white">{new Date(backdateUserValue).toLocaleString()}</span></p>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button onClick={() => { setShowBackdateUserModal(false); setBackdateUser(null); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Cancel</button>
+                <button onClick={handleBackdateUser} disabled={!backdateUserValue} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">Update Date</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BACKDATE TRANSACTION MODAL ── */}
+      {showBackdateTxModal && backdateTx && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold">Backdate Transaction</h3>
+              <button onClick={() => { setShowBackdateTxModal(false); setBackdateTx(null); }} className="text-[var(--muted)] hover:text-white">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            {/* Transaction summary */}
+            <div className="mb-4 p-3 bg-[var(--background)] rounded-lg space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--muted)] capitalize">{backdateTx.type}</span>
+                <span className={`text-sm font-bold ${backdateTx.type === "withdrawal" || backdateTx.type === "transfer" || backdateTx.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                  {backdateTx.type === "withdrawal" || backdateTx.type === "transfer" || backdateTx.type === "donation" ? "-" : "+"}
+                  ${backdateTx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {backdateTx.currency}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--muted)]">
+                User: <span className="text-white">{typeof backdateTx.userId === "object" ? backdateTx.userId.fullName : "—"}</span>
+              </p>
+              {(backdateTx.recipientFullName || backdateTx.senderName || backdateTx.receiverName) && (
+                <p className="text-xs text-[var(--muted)]">
+                  {backdateTx.recipientFullName ? `To: ${backdateTx.recipientFullName}` : backdateTx.senderName ? `From: ${backdateTx.senderName}` : `To: ${backdateTx.receiverName}`}
+                </p>
+              )}
+              {(backdateTx.referenceMemo || backdateTx.description) && (
+                <p className="text-xs text-[var(--muted)]">Memo: {backdateTx.referenceMemo || backdateTx.description}</p>
+              )}
+              <p className="text-xs text-[var(--muted)]">
+                Current date: <span className="text-white">{txDisplayDate(backdateTx)}</span>
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${backdateTx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : backdateTx.status === "processing" ? "bg-blue-500/10 text-blue-400" : backdateTx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>
+                  {backdateTx.status}
+                </span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1.5">New Transaction Date & Time</label>
                 <input
                   type="datetime-local"
-                  value={backdateValue}
-                  onChange={(e) => setBackdateValue(e.target.value)}
+                  value={backdateTxValue}
+                  onChange={(e) => setBackdateTxValue(e.target.value)}
                   className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
-              {backdateValue && (
+              {backdateTxValue && (
                 <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
                   <p className="text-xs text-orange-400">
-                    Account will show as created on:{" "}
-                    <span className="font-medium text-white">
-                      {new Date(backdateValue).toLocaleString()}
-                    </span>
+                    Transaction will show as occurring on:{" "}
+                    <span className="font-medium text-white">{new Date(backdateTxValue).toLocaleString()}</span>
                   </p>
                 </div>
               )}
               <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowBackdateModal(false);
-                    setBackdateUser(null);
-                  }}
-                  className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBackdateUser}
-                  disabled={!backdateValue}
-                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-                >
+                <button onClick={() => { setShowBackdateTxModal(false); setBackdateTx(null); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Cancel</button>
+                <button onClick={handleBackdateTransaction} disabled={!backdateTxValue} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
                   Update Date
                 </button>
               </div>
@@ -2505,73 +1214,33 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-lg font-semibold">Add Transaction History</h3>
-                <p className="text-xs text-[var(--muted)] mt-0.5">
-                  Create a backdated or custom transaction entry for a user
-                </p>
+                <p className="text-xs text-[var(--muted)] mt-0.5">Create a backdated or custom transaction entry for a user</p>
               </div>
-              <button
-                onClick={() => {
-                  setShowTxModal(false);
-                  setTxModalUser(null);
-                  setUserTxHistory([]);
-                }}
-                className="text-[var(--muted)] hover:text-white"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+              <button onClick={() => { setShowTxModal(false); setTxModalUser(null); setUserTxHistory([]); }} className="text-[var(--muted)] hover:text-white">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Left: Form */}
               <div className="space-y-4">
-                {/* User selector */}
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Select User</label>
-                  <select
-                    value={txModalUser?._id || ""}
-                    onChange={(e) => {
-                      const u = users.find((u) => u._id === e.target.value) || null;
-                      setTxModalUser(u);
-                      if (u) fetchUserHistory(u._id);
-                    }}
-                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
+                  <select value={txModalUser?._id || ""} onChange={(e) => { const u = users.find((u) => u._id === e.target.value) || null; setTxModalUser(u); if (u) fetchUserHistory(u._id); }}
+                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500">
                     <option value="">— Select a user —</option>
-                    {users
-                      .filter((u) => u.role !== "admin")
-                      .map((u) => (
-                        <option key={u._id} value={u._id}>
-                          {u.fullName} ({u.email})
-                        </option>
-                      ))}
+                    {users.filter((u) => u.role !== "admin").map((u) => (
+                      <option key={u._id} value={u._id}>{u.fullName} ({u.email})</option>
+                    ))}
                   </select>
                   {txModalUser && (
-                    <p className="text-xs text-[var(--muted)] mt-1">
-                      Current balance:{" "}
-                      <span className="text-white font-medium">
-                        ${txModalUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </span>
-                    </p>
+                    <p className="text-xs text-[var(--muted)] mt-1">Current balance: <span className="text-white font-medium">${txModalUser.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></p>
                   )}
                 </div>
 
-                {/* Type */}
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Transaction Type</label>
-                  <select
-                    value={txForm.type}
-                    onChange={(e) =>
-                      setTxForm({ ...txForm, type: e.target.value, senderName: "", receiverName: "" })
-                    }
-                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
+                  <select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, senderName: "", receiverName: "" })}
+                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500">
                     <option value="deposit">Deposit</option>
                     <option value="withdrawal">Withdrawal</option>
                     <option value="transfer">Transfer</option>
@@ -2580,179 +1249,94 @@ export default function AdminPage() {
                   </select>
                 </div>
 
-                {/* Amount & Currency */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Amount</label>
-                    <input
-                      type="number"
-                      value={txForm.amount}
-                      onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
+                    <input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
                       className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-                      placeholder="0.00"
-                      step="0.01"
-                      min="0"
-                    />
+                      placeholder="0.00" step="0.01" min="0" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Currency</label>
-                    <select
-                      value={txForm.currency}
-                      onChange={(e) => setTxForm({ ...txForm, currency: e.target.value })}
-                      className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                    >
+                    <select value={txForm.currency} onChange={(e) => setTxForm({ ...txForm, currency: e.target.value })}
+                      className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500">
                       {["USD", "EUR", "GBP", "BTC", "ETH", "USDT", "BNB", "NGN"].map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
+                        <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
                   </div>
                 </div>
 
-                {/* Sender name */}
                 {showSenderField && (
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">
-                      Sender Name{" "}
-                      <span className="text-[var(--muted)]">(who sent the money)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={txForm.senderName}
-                      onChange={(e) => setTxForm({ ...txForm, senderName: e.target.value })}
+                    <label className="block text-sm font-medium mb-1.5">Sender Name <span className="text-[var(--muted)]">(who sent the money)</span></label>
+                    <input type="text" value={txForm.senderName} onChange={(e) => setTxForm({ ...txForm, senderName: e.target.value })}
                       className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-                      placeholder="e.g. Bank of America, John Smith, PayPal Inc."
-                    />
+                      placeholder="e.g. Bank of America, John Smith, PayPal Inc." />
                   </div>
                 )}
 
-                {/* Receiver name */}
                 {showReceiverField && (
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">
-                      Receiver Name{" "}
-                      <span className="text-[var(--muted)]">(who received the money)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={txForm.receiverName}
-                      onChange={(e) => setTxForm({ ...txForm, receiverName: e.target.value })}
+                    <label className="block text-sm font-medium mb-1.5">Receiver Name <span className="text-[var(--muted)]">(who received the money)</span></label>
+                    <input type="text" value={txForm.receiverName} onChange={(e) => setTxForm({ ...txForm, receiverName: e.target.value })}
                       className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-                      placeholder="e.g. Amazon LLC, Jane Doe, Crypto Exchange"
-                    />
+                      placeholder="e.g. Amazon LLC, Jane Doe, Crypto Exchange" />
                   </div>
                 )}
 
-                {/* Transaction Date (backdating) */}
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">
-                    Transaction Date & Time{" "}
-                    <span className="text-[var(--muted)]">(leave empty for now)</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={txForm.transactionDate}
-                    onChange={(e) => setTxForm({ ...txForm, transactionDate: e.target.value })}
-                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
+                  <label className="block text-sm font-medium mb-1.5">Transaction Date & Time <span className="text-[var(--muted)]">(leave empty for now)</span></label>
+                  <input type="datetime-local" value={txForm.transactionDate} onChange={(e) => setTxForm({ ...txForm, transactionDate: e.target.value })}
+                    className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500" />
                 </div>
 
-                {/* Description */}
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Description / Memo</label>
-                  <input
-                    type="text"
-                    value={txForm.description}
-                    onChange={(e) => setTxForm({ ...txForm, description: e.target.value })}
+                  <input type="text" value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })}
                     className="w-full bg-[var(--background)] border border-[var(--card-border)] rounded-lg px-4 py-2.5 text-sm text-white placeholder-[var(--muted)] focus:outline-none focus:border-blue-500"
-                    placeholder="e.g. Monthly salary, Wire transfer, Grant disbursement..."
-                  />
+                    placeholder="e.g. Monthly salary, Wire transfer, Grant disbursement..." />
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Status</label>
                   <div className="grid grid-cols-3 gap-2">
                     {(["completed", "pending", "failed"] as const).map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => setTxForm({ ...txForm, status: s })}
-                        className={`py-2 rounded-lg text-sm font-medium capitalize ${
-                          txForm.status === s
-                            ? s === "completed"
-                              ? "bg-emerald-500 text-white"
-                              : s === "pending"
-                              ? "bg-amber-500 text-white"
-                              : "bg-red-500 text-white"
-                            : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"
-                        }`}
-                      >
+                      <button key={s} onClick={() => setTxForm({ ...txForm, status: s })}
+                        className={`py-2 rounded-lg text-sm font-medium capitalize ${txForm.status === s ? (s === "completed" ? "bg-emerald-500 text-white" : s === "pending" ? "bg-amber-500 text-white" : "bg-red-500 text-white") : "bg-[var(--background)] border border-[var(--card-border)] text-[var(--muted)] hover:text-white"}`}>
                         {s}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Update balance toggle */}
                 <div className="flex items-center justify-between p-3 bg-[var(--background)] rounded-lg">
                   <div>
                     <p className="text-sm font-medium">Update User Balance</p>
-                    <p className="text-xs text-[var(--muted)]">
-                      Adjust balance based on this transaction
-                    </p>
+                    <p className="text-xs text-[var(--muted)]">Adjust balance based on this transaction</p>
                   </div>
-                  <button
-                    onClick={() => setTxForm({ ...txForm, updateBalance: !txForm.updateBalance })}
-                    className={`w-12 h-6 rounded-full relative transition-colors ${
-                      txForm.updateBalance ? "bg-blue-500" : "bg-[var(--card-border)]"
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                        txForm.updateBalance ? "right-1" : "left-1"
-                      }`}
-                    ></div>
+                  <button onClick={() => setTxForm({ ...txForm, updateBalance: !txForm.updateBalance })}
+                    className={`w-12 h-6 rounded-full relative transition-colors ${txForm.updateBalance ? "bg-blue-500" : "bg-[var(--card-border)]"}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${txForm.updateBalance ? "right-1" : "left-1"}`}></div>
                   </button>
                 </div>
 
-                {/* Preview */}
                 {txModalUser && txForm.amount && parseFloat(txForm.amount) > 0 && (
                   <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                     <p className="text-xs text-blue-400 font-medium mb-1">Preview</p>
                     <p className="text-sm">
                       <span className="font-medium">{txModalUser.fullName}</span> — {txForm.type} of{" "}
-                      <span
-                        className={`font-bold ${
-                          txForm.type === "withdrawal" || txForm.type === "donation"
-                            ? "text-red-400"
-                            : "text-emerald-400"
-                        }`}
-                      >
-                        {txForm.type === "withdrawal" || txForm.type === "donation" ? "-" : "+"}$
-                        {parseFloat(txForm.amount).toLocaleString()} {txForm.currency}
+                      <span className={`font-bold ${txForm.type === "withdrawal" || txForm.type === "donation" ? "text-red-400" : "text-emerald-400"}`}>
+                        {txForm.type === "withdrawal" || txForm.type === "donation" ? "-" : "+"}${parseFloat(txForm.amount).toLocaleString()} {txForm.currency}
                       </span>
                     </p>
-                    {txForm.senderName && (
-                      <p className="text-xs text-[var(--muted)] mt-1">From: {txForm.senderName}</p>
-                    )}
-                    {txForm.receiverName && (
-                      <p className="text-xs text-[var(--muted)] mt-1">To: {txForm.receiverName}</p>
-                    )}
-                    {txForm.transactionDate && (
-                      <p className="text-xs text-[var(--muted)] mt-1">
-                        Date: {new Date(txForm.transactionDate).toLocaleString()}
-                      </p>
-                    )}
+                    {txForm.senderName && <p className="text-xs text-[var(--muted)] mt-1">From: {txForm.senderName}</p>}
+                    {txForm.receiverName && <p className="text-xs text-[var(--muted)] mt-1">To: {txForm.receiverName}</p>}
+                    {txForm.transactionDate && <p className="text-xs text-[var(--muted)] mt-1">Date: {new Date(txForm.transactionDate).toLocaleString()}</p>}
                     {txForm.updateBalance && txForm.status === "completed" && (
                       <p className="text-xs text-[var(--muted)] mt-1">
-                        New balance:{" "}
-                        <span className="text-white font-medium">
-                          $
-                          {(txForm.type === "withdrawal" || txForm.type === "donation"
-                            ? txModalUser.balance - parseFloat(txForm.amount)
-                            : txModalUser.balance + parseFloat(txForm.amount)
-                          ).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        New balance: <span className="text-white font-medium">
+                          ${(txForm.type === "withdrawal" || txForm.type === "donation" ? txModalUser.balance - parseFloat(txForm.amount) : txModalUser.balance + parseFloat(txForm.amount)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                         </span>
                       </p>
                     )}
@@ -2760,105 +1344,41 @@ export default function AdminPage() {
                 )}
 
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowTxModal(false);
-                      setTxModalUser(null);
-                      setUserTxHistory([]);
-                    }}
-                    className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium"
-                  >
-                    Close
-                  </button>
-                  <button
-                    onClick={handleAddTransaction}
-                    disabled={!txModalUser || !txForm.amount || parseFloat(txForm.amount) <= 0}
-                    className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
-                  >
+                  <button onClick={() => { setShowTxModal(false); setTxModalUser(null); setUserTxHistory([]); }} className="flex-1 btn-outline text-white py-2.5 rounded-lg text-sm font-medium">Close</button>
+                  <button onClick={handleAddTransaction} disabled={!txModalUser || !txForm.amount || parseFloat(txForm.amount) <= 0} className="flex-1 btn-primary text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50">
                     Add Transaction
                   </button>
                 </div>
               </div>
 
-              {/* Right: User's existing history */}
               <div>
                 <h4 className="text-sm font-semibold mb-3 text-[var(--muted)]">
-                  {txModalUser
-                    ? `${txModalUser.fullName}'s History (${userTxHistory.length})`
-                    : "Select a user to see their history"}
+                  {txModalUser ? `${txModalUser.fullName}'s History (${userTxHistory.length})` : "Select a user to see their history"}
                 </h4>
                 <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                   {userTxHistory.length > 0 ? (
                     userTxHistory.map((tx) => (
-                      <div
-                        key={tx._id}
-                        className="p-3 bg-[var(--background)] border border-[var(--card-border)] rounded-lg"
-                      >
+                      <div key={tx._id} className="p-3 bg-[var(--background)] border border-[var(--card-border)] rounded-lg">
                         <div className="flex items-center justify-between mb-1">
-                          <span
-                            className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${
-                              tx.type === "withdrawal" ||
-                              tx.type === "donation" ||
-                              tx.type === "transfer"
-                                ? "bg-red-500/10 text-red-400"
-                                : "bg-emerald-500/10 text-emerald-400"
-                            }`}
-                          >
-                            {tx.type}
-                          </span>
-                          <span
-                            className={`text-sm font-bold ${
-                              tx.type === "withdrawal" ||
-                              tx.type === "donation" ||
-                              tx.type === "transfer"
-                                ? "text-red-400"
-                                : "text-emerald-400"
-                            }`}
-                          >
-                            {tx.type === "withdrawal" ||
-                            tx.type === "donation" ||
-                            tx.type === "transfer"
-                              ? "-"
-                              : "+"}
-                            ${tx.amount.toLocaleString()} {tx.currency}
+                          <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${tx.type === "withdrawal" || tx.type === "donation" || tx.type === "transfer" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>{tx.type}</span>
+                          <span className={`text-sm font-bold ${tx.type === "withdrawal" || tx.type === "donation" || tx.type === "transfer" ? "text-red-400" : "text-emerald-400"}`}>
+                            {tx.type === "withdrawal" || tx.type === "donation" || tx.type === "transfer" ? "-" : "+"}${tx.amount.toLocaleString()} {tx.currency}
                           </span>
                         </div>
-                        {tx.senderName && (
-                          <p className="text-xs text-[var(--muted)]">From: {tx.senderName}</p>
-                        )}
-                        {tx.receiverName && (
-                          <p className="text-xs text-[var(--muted)]">To: {tx.receiverName}</p>
-                        )}
-                        {tx.recipientFullName && (
-                          <p className="text-xs text-[var(--muted)]">To: {tx.recipientFullName}</p>
-                        )}
-                        {(tx.referenceMemo || tx.description) && (
-                          <p className="text-xs text-[var(--muted)]">
-                            {tx.referenceMemo || tx.description}
-                          </p>
-                        )}
+                        {tx.senderName && <p className="text-xs text-[var(--muted)]">From: {tx.senderName}</p>}
+                        {tx.receiverName && <p className="text-xs text-[var(--muted)]">To: {tx.receiverName}</p>}
+                        {tx.recipientFullName && <p className="text-xs text-[var(--muted)]">To: {tx.recipientFullName}</p>}
+                        {(tx.referenceMemo || tx.description) && <p className="text-xs text-[var(--muted)]">{tx.referenceMemo || tx.description}</p>}
                         <div className="flex items-center justify-between mt-1">
                           <p className="text-xs text-[var(--muted)]">{txDisplayDate(tx)}</p>
-                          <span
-                            className={`text-xs px-1.5 py-0.5 rounded-full ${
-                              tx.status === "completed"
-                                ? "bg-emerald-500/10 text-emerald-400"
-                                : tx.status === "processing"
-                                ? "bg-blue-500/10 text-blue-400"
-                                : tx.status === "pending"
-                                ? "bg-amber-500/10 text-amber-400"
-                                : "bg-red-500/10 text-red-400"
-                            }`}
-                          >
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${tx.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : tx.status === "processing" ? "bg-blue-500/10 text-blue-400" : tx.status === "pending" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>
                             {tx.status}
                           </span>
                         </div>
                       </div>
                     ))
                   ) : txModalUser ? (
-                    <p className="text-xs text-[var(--muted)] py-4 text-center">
-                      No history yet. Add the first transaction above.
-                    </p>
+                    <p className="text-xs text-[var(--muted)] py-4 text-center">No history yet. Add the first transaction above.</p>
                   ) : null}
                 </div>
               </div>
