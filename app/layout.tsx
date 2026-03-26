@@ -17,7 +17,12 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Octa City Bank - Banking Without Boundaries",
   description: "Secure, smart, and seamless banking for the modern world. Manage your finances, access grants, and make global donations with Octa City Bank.",
+   verification: {
+    google: "yEiFp1hHldIH7ncOIvKhK8zKxc1t8QUQHqoitfG2JzE",
+  },
 };
+
+
 
 export default function RootLayout({
   children,
